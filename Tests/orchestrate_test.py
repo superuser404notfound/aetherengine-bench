@@ -8,8 +8,12 @@ a real launch, or a real thermal reading is exercised by the dry run and
 the forced-discard demonstration instead, both described in the task-9
 report, not here.)
 """
+import json
 import os
+import pathlib
+import subprocess
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -101,6 +105,20 @@ class ValidateReportTests(unittest.TestCase):
 
     def test_unparseable_timestamp_fails_loudly_not_silently(self):
         reason = orchestrate.validate_report(make_report(startedAt="not-a-date"), "aether", "h264-1080p.mp4")
+        self.assertIsNotNone(reason)
+
+    def test_null_required_field_fails_instead_of_raising(self):
+        # A bare `f not in report` check would let a present-but-null field
+        # through to `report["expectedFrames"] <= 0` and raise a TypeError
+        # uncaught. No writer produces null today; this is defense in depth.
+        reason = orchestrate.validate_report(make_report(expectedFrames=None), "aether", "h264-1080p.mp4")
+        self.assertIsNotNone(reason)
+        self.assertIn("expectedFrames", reason)
+
+    def test_wrong_type_field_fails_instead_of_raising(self):
+        # A field of the wrong type (string where a number is expected)
+        # must become a discard reason too, not an uncaught TypeError.
+        reason = orchestrate.validate_report(make_report(expectedFrames="120"), "aether", "h264-1080p.mp4")
         self.assertIsNotNone(reason)
 
 
@@ -221,6 +239,17 @@ class EvaluateRunTests(unittest.TestCase):
         self.assertEqual(len(reasons), 2)
         self.assertTrue(any("throttling" in r for r in reasons))
         self.assertTrue(any("process sampling failed" in r for r in reasons))
+
+    def test_unclean_baseline_is_reported_and_combines_with_other_reasons(self):
+        reasons, gate = orchestrate.evaluate_run(
+            HEALTHY_POWER, make_report(), None, None, "aether", "h264-1080p.mp4",
+            orchestrate.ProtocolConfig(),
+            baseline_error="machine reported throttling (level=Heavy) while idle")
+        self.assertEqual(len(reasons), 1)
+        self.assertIn("idle baseline was not clean", reasons[0])
+        # The frame gate itself is unaffected: this run's own delivery was
+        # fine, only the power figure derived from it is untrustworthy.
+        self.assertTrue(gate["passed"])
 
 
 class DroppedFramesReportedTests(unittest.TestCase):
@@ -402,6 +431,67 @@ class LaunchWithRetryTests(unittest.TestCase):
         self.assertIn("crashed during settle", reason)
 
 
+class MeasureOnceGuardedSamplingTests(unittest.TestCase):
+    """measure_once is the function the critical review finding was about:
+    sample_power is documented to raise, and it was called unguarded here.
+    These drive measure_once itself (not just the pieces it's built from)
+    to prove a raise becomes a discarded record, not a propagated
+    exception, and that the player is always terminated."""
+
+    def test_power_sampling_failure_is_a_discarded_record_not_a_raise(self):
+        fake_proc = FakeProc(pid=1)
+        with mock.patch.object(orchestrate, "launch_with_retry",
+                                return_value=(fake_proc, 999, 1, "/tmp/fake.json", None)), \
+             mock.patch.object(orchestrate.sampler, "sample_power", side_effect=RuntimeError("powermetrics hung")), \
+             mock.patch.object(orchestrate.sampler, "sample_process", return_value={"cpuPercentMean": 1.0}):
+            record = orchestrate.measure_once("aether", "h264-1080p.mp4", 0, {"cpuPowerMw": 100.0},
+                                               orchestrate.ProtocolConfig(), {"aether": 0}, pathlib.Path("/tmp"))
+        self.assertTrue(record["discarded"])
+        self.assertIn("power sampling failed", record["discardReason"])
+        self.assertIsNone(record["power"])
+        self.assertIsNone(record["report"])
+
+    def test_power_sampling_failure_still_terminates_the_player(self):
+        fake_proc = FakeProc(pid=1)
+        with mock.patch.object(orchestrate, "launch_with_retry",
+                                return_value=(fake_proc, 999, 1, "/tmp/fake.json", None)), \
+             mock.patch.object(orchestrate.sampler, "sample_power", side_effect=RuntimeError("powermetrics hung")), \
+             mock.patch.object(orchestrate.sampler, "sample_process", return_value={"cpuPercentMean": 1.0}), \
+             mock.patch.object(orchestrate, "_terminate_player") as terminate_mock:
+            orchestrate.measure_once("aether", "h264-1080p.mp4", 0, {"cpuPowerMw": 100.0},
+                                      orchestrate.ProtocolConfig(), {"aether": 0}, pathlib.Path("/tmp"))
+        terminate_mock.assert_called_once()
+        self.assertEqual(terminate_mock.call_args.args[0], fake_proc)
+
+    def test_healthy_path_still_terminates_the_player_with_the_normal_grace_period(self):
+        fake_proc = FakeProc(pid=1)
+        with mock.patch.object(orchestrate, "launch_with_retry",
+                                return_value=(fake_proc, 999, 1, "/tmp/does-not-exist.json", None)), \
+             mock.patch.object(orchestrate.sampler, "sample_power", return_value=dict(HEALTHY_POWER)), \
+             mock.patch.object(orchestrate.sampler, "sample_process", return_value={"cpuPercentMean": 1.0}), \
+             mock.patch.object(orchestrate, "_terminate_player") as terminate_mock:
+            record = orchestrate.measure_once("aether", "h264-1080p.mp4", 0, {"cpuPowerMw": 100.0},
+                                               orchestrate.ProtocolConfig(), {"aether": 0}, pathlib.Path("/tmp"))
+        terminate_mock.assert_called_once_with(fake_proc, "aether", wait_timeout=60)
+        # No report file existed at that path, so this record is discarded
+        # for that reason, but the player is still cleanly terminated.
+        self.assertTrue(record["discarded"])
+
+    def test_baseline_error_zeroes_subtracted_power_but_keeps_raw(self):
+        fake_proc = FakeProc(pid=1)
+        with mock.patch.object(orchestrate, "launch_with_retry",
+                                return_value=(fake_proc, 999, 1, "/tmp/does-not-exist.json", None)), \
+             mock.patch.object(orchestrate.sampler, "sample_power", return_value=dict(HEALTHY_POWER)), \
+             mock.patch.object(orchestrate.sampler, "sample_process", return_value={"cpuPercentMean": 1.0}), \
+             mock.patch.object(orchestrate, "_terminate_player"):
+            record = orchestrate.measure_once("aether", "h264-1080p.mp4", 0, {"cpuPowerMw": 100.0},
+                                               orchestrate.ProtocolConfig(), {"aether": 0}, pathlib.Path("/tmp"),
+                                               baseline_error="machine reported throttling while idle")
+        self.assertIsNone(record["power"]["cpuPowerMw"])
+        self.assertEqual(record["powerRaw"]["cpuPowerMw"], HEALTHY_POWER["cpuPowerMw"])
+        self.assertIn("idle baseline was not clean", record["discardReason"])
+
+
 class DemoteTests(unittest.TestCase):
     def test_requires_sudo_user_rather_than_falling_back_to_user(self):
         # Under sudo, $USER is not reliably the invoking user (it can read
@@ -415,6 +505,157 @@ class DemoteTests(unittest.TestCase):
     def test_uses_sudo_user_when_present(self):
         with mock.patch.dict(os.environ, {"SUDO_USER": "vincentherbst"}):
             self.assertEqual(orchestrate.demote(), ["sudo", "-u", "vincentherbst"])
+
+
+def make_fake_clock():
+    clock = {"t": 0.0}
+    return clock, (lambda: clock["t"]), (lambda s: clock.__setitem__("t", clock["t"] + s))
+
+
+class TerminatePlayerTests(unittest.TestCase):
+    def test_already_exited_is_a_no_op(self):
+        proc = FakeProc(pid=1, exit_after=1)
+        proc.poll()  # make it "exited" before _terminate_player is called
+        orchestrate._terminate_player(proc, "aether", wait_timeout=1)
+        self.assertNotEqual(proc.returncode, -15)  # never escalated to terminate()
+
+    def test_exits_gracefully_within_wait_timeout(self):
+        # exit_after=1 makes the first poll() (inside _terminate_player)
+        # observe the process as already exited: no escalation to
+        # terminate()/kill() should happen.
+        proc = FakeProc(pid=2, exit_after=1)
+        orchestrate._terminate_player(proc, "aether", wait_timeout=1)
+        self.assertEqual(proc.returncode, 1)  # exit_after's own code, never -15/-9
+
+    def test_escalates_to_terminate_when_wait_times_out(self):
+        class HangingProc(FakeProc):
+            def wait(self, timeout=None):
+                if self.returncode == -15:  # terminate() already called
+                    return self.returncode
+                raise subprocess.TimeoutExpired(cmd="x", timeout=timeout)
+
+        proc = HangingProc(pid=3)
+        orchestrate._terminate_player(proc, "aether", wait_timeout=0.01)
+        self.assertEqual(proc.returncode, -15)  # terminate() was called
+
+    def test_no_failure_path_leaves_the_process_running(self):
+        # Every branch (already exited, graceful exit, escalation) must
+        # leave the process not-running by the time _terminate_player
+        # returns: this is the property the "finally" wiring in
+        # measure_once exists to guarantee.
+        class NeverExitsProc(FakeProc):
+            def wait(self, timeout=None):
+                if self.returncode in (-15, -9):
+                    return self.returncode
+                raise subprocess.TimeoutExpired(cmd="x", timeout=timeout)
+
+        proc = NeverExitsProc(pid=4)
+        orchestrate._terminate_player(proc, "aether", wait_timeout=0.01)
+        self.assertIn(proc.returncode, (-15, -9))
+
+
+class TakeCleanBaselineTests(unittest.TestCase):
+    def test_clean_on_first_attempt_needs_no_retry(self):
+        cooldowns = {"n": 0}
+        baseline, error = orchestrate.take_clean_baseline(
+            orchestrate.ProtocolConfig(), cool_and_retry=lambda: cooldowns.__setitem__("n", cooldowns["n"] + 1),
+            sample_fn=lambda seconds: dict(HEALTHY_POWER))
+        self.assertIsNone(error)
+        self.assertEqual(baseline["thermalPressure"], "Nominal")
+        self.assertEqual(cooldowns["n"], 0)
+
+    def test_retries_on_throttled_baseline_then_succeeds(self):
+        attempts = [dict(THROTTLED_POWER), dict(HEALTHY_POWER)]
+        cooldowns = {"n": 0}
+        baseline, error = orchestrate.take_clean_baseline(
+            orchestrate.ProtocolConfig(), cool_and_retry=lambda: cooldowns.__setitem__("n", cooldowns["n"] + 1),
+            max_attempts=3, sample_fn=lambda seconds: attempts.pop(0))
+        self.assertIsNone(error)
+        self.assertEqual(cooldowns["n"], 1)
+
+    def test_retries_on_unreported_thermal_pressure(self):
+        unknown = dict(HEALTHY_POWER, thermalPressure=None, throttled=False)
+        attempts = [unknown, dict(HEALTHY_POWER)]
+        baseline, error = orchestrate.take_clean_baseline(
+            orchestrate.ProtocolConfig(), cool_and_retry=lambda: None,
+            max_attempts=3, sample_fn=lambda seconds: attempts.pop(0))
+        self.assertIsNone(error)
+
+    def test_retries_on_too_few_samples(self):
+        thin = dict(HEALTHY_POWER, samples=2)
+        attempts = [thin, dict(HEALTHY_POWER)]
+        baseline, error = orchestrate.take_clean_baseline(
+            orchestrate.ProtocolConfig(), cool_and_retry=lambda: None,
+            max_attempts=3, sample_fn=lambda seconds: attempts.pop(0))
+        self.assertIsNone(error)
+
+    def test_sample_power_raising_is_retried_not_propagated(self):
+        # sample_power is documented to raise on a hung/failing
+        # powermetrics; the baseline path must not let that raise out of
+        # take_clean_baseline any more than measure_once lets it out for a
+        # per-run sample.
+        calls = {"n": 0}
+
+        def flaky(seconds):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("sudo powermetrics timed out")
+            return dict(HEALTHY_POWER)
+
+        baseline, error = orchestrate.take_clean_baseline(
+            orchestrate.ProtocolConfig(), cool_and_retry=lambda: None, max_attempts=3, sample_fn=flaky)
+        self.assertIsNone(error)
+        self.assertEqual(calls["n"], 2)
+
+    def test_exhausting_attempts_returns_last_baseline_and_error_not_raise(self):
+        cooldowns = {"n": 0}
+        baseline, error = orchestrate.take_clean_baseline(
+            orchestrate.ProtocolConfig(), cool_and_retry=lambda: cooldowns.__setitem__("n", cooldowns["n"] + 1),
+            max_attempts=3, sample_fn=lambda seconds: dict(THROTTLED_POWER))
+        self.assertIsNotNone(error)
+        self.assertIn("throttling", error)
+        self.assertEqual(baseline["thermalPressure"], "Heavy")  # last attempt, not discarded
+        self.assertEqual(cooldowns["n"], 2)  # cools down between attempts, not after the last one
+
+    def test_every_attempt_raising_returns_empty_baseline_and_error(self):
+        baseline, error = orchestrate.take_clean_baseline(
+            orchestrate.ProtocolConfig(), cool_and_retry=lambda: None, max_attempts=2,
+            sample_fn=lambda seconds: (_ for _ in ()).throw(RuntimeError("powermetrics gone")))
+        self.assertIsNotNone(error)
+        self.assertEqual(baseline, {})  # never subtracted: _baseline_subtract/measure_once
+        # treat this the same as any other unclean baseline via baseline_error,
+        # not by handing back a dict that looks like a real reading.
+
+
+class WriteResultsTests(unittest.TestCase):
+    def test_writes_valid_json_matching_payload(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = pathlib.Path(d) / "results.json"
+            orchestrate.write_results(out, {"runs": [], "machine": "test"})
+            with open(out) as f:
+                data = json.load(f)
+            self.assertEqual(data, {"runs": [], "machine": "test"})
+
+    def test_incremental_rewrites_reflect_growth(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = pathlib.Path(d) / "results.json"
+            runs = []
+            payload = {"runs": runs}
+            orchestrate.write_results(out, payload)
+            runs.append({"backend": "aether"})
+            orchestrate.write_results(out, payload)
+            runs.append({"backend": "mpv"})
+            orchestrate.write_results(out, payload)
+            with open(out) as f:
+                data = json.load(f)
+            self.assertEqual(len(data["runs"]), 2)
+
+    def test_no_leftover_tmp_file(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = pathlib.Path(d) / "results.json"
+            orchestrate.write_results(out, {"runs": []})
+            tmp = out.with_suffix(out.suffix + ".tmp")
+            self.assertFalse(tmp.exists())  # os.replace consumed it
 
 
 if __name__ == "__main__":

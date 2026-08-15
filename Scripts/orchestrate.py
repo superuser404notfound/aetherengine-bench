@@ -78,6 +78,18 @@ DEFAULT_GATE_THRESHOLD = 0.95
 # crashed attempt along the way is still counted, never silently absorbed.
 DEFAULT_MAX_LAUNCH_ATTEMPTS = 5
 
+# Idle baseline duration, fixed regardless of --measure: this is what gets
+# subtracted from every record in a fixture's block (up to REPEATS *
+# len(backends) of them), so its own cleanliness matters more than its
+# length tracking the run's.
+BASELINE_SECONDS = 60
+# Coarse floor, not a reconstruction of sampler.py's own
+# n = seconds*1000/interval_ms math: a baseline that produced under half
+# its nominal sample count is evidence powermetrics was interrupted or
+# degraded partway through, not a real 60s-worth-of-idle reading.
+MIN_BASELINE_SAMPLES = BASELINE_SECONDS // 2
+DEFAULT_BASELINE_MAX_ATTEMPTS = 3
+
 
 @dataclasses.dataclass(frozen=True)
 class ProtocolConfig:
@@ -126,25 +138,35 @@ def validate_report(report, expected_backend, expected_fixture):
     """
     if not report:
         return "empty report"
-    missing = [f for f in REQUIRED_REPORT_FIELDS if f not in report]
+    # report.get(f) is None catches both "key absent" and "key present but
+    # null": no writer produces the latter today, but a bare `f not in
+    # report` check would let a null field through to the arithmetic below
+    # and raise a TypeError uncaught, exactly the "one exception loses the
+    # whole session" failure mode this repo cannot afford anywhere in the
+    # per-cell path.
+    missing = [f for f in REQUIRED_REPORT_FIELDS if report.get(f) is None]
     if missing:
-        return f"report missing required field(s): {', '.join(missing)}"
-    if report["backend"] != expected_backend:
-        return (f"report backend mismatch: launched {expected_backend!r}, "
-                f"report says {report['backend']!r} (stale report file?)")
-    if report["fixture"] != expected_fixture:
-        return (f"report fixture mismatch: launched {expected_fixture!r}, "
-                f"report says {report['fixture']!r} (stale report file?)")
-    if report["expectedFrames"] <= 0:
-        return f"report has non-positive expectedFrames ({report['expectedFrames']})"
-    if report["deliveredFrames"] < 0:
-        return f"report has negative deliveredFrames ({report['deliveredFrames']})"
+        return f"report missing or null required field(s): {', '.join(missing)}"
     try:
+        if report["backend"] != expected_backend:
+            return (f"report backend mismatch: launched {expected_backend!r}, "
+                    f"report says {report['backend']!r} (stale report file?)")
+        if report["fixture"] != expected_fixture:
+            return (f"report fixture mismatch: launched {expected_fixture!r}, "
+                    f"report says {report['fixture']!r} (stale report file?)")
+        if report["expectedFrames"] <= 0:
+            return f"report has non-positive expectedFrames ({report['expectedFrames']})"
+        if report["deliveredFrames"] < 0:
+            return f"report has negative deliveredFrames ({report['deliveredFrames']})"
         started, ended = parse_iso8601(report["startedAt"]), parse_iso8601(report["endedAt"])
+        if ended <= started:
+            return f"endedAt ({report['endedAt']}) not after startedAt ({report['startedAt']})"
     except Exception as exc:
-        return f"unparseable startedAt/endedAt ({exc.__class__.__name__}: {exc})"
-    if ended <= started:
-        return f"endedAt ({report['endedAt']}) not after startedAt ({report['startedAt']})"
+        # Belt and suspenders beyond the null check above: a field of the
+        # wrong type (a string where a number is expected, say) must become
+        # a discard reason too, never an uncaught exception that takes the
+        # whole session down with it.
+        return f"unexpected error validating report ({exc.__class__.__name__}: {exc})"
     return None
 
 
@@ -291,6 +313,91 @@ def _baseline_subtract(key, value, baseline_value):
     return value - baseline_value
 
 
+def _terminate_player(proc, backend, wait_timeout=60):
+    """Always called once a measured window is over or abandoned, success
+    or failure alike: no path through measure_once may return with the
+    player still alive. Tries a graceful wait first (the player writes its
+    own report and calls stop() on a clock that trails the orchestrator's
+    external settle-wait slightly, see spawn_and_settle's docstring, so it
+    is often still finishing its own teardown right as sampling ends),
+    escalating to SIGTERM and finally SIGKILL only if that does not clear
+    the process in time. wait_timeout is shortened by the caller when the
+    window was abandoned early (a sampler failure) rather than completed
+    normally, so a doomed cell does not sit around for a minute waiting for
+    a player that was never going to produce a trustworthy report anyway.
+    """
+    if proc.poll() is not None:
+        return
+    try:
+        proc.wait(timeout=wait_timeout)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    print(f"    {backend}: player did not exit within {wait_timeout}s, sending SIGTERM")
+    try:
+        proc.terminate()
+        proc.wait(timeout=15)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    except Exception:
+        pass
+    print(f"    {backend}: player still alive after SIGTERM, killing")
+    try:
+        proc.kill()
+        proc.wait(timeout=10)
+    except Exception:
+        pass
+
+
+def take_clean_baseline(cfg, cool_and_retry, max_attempts=DEFAULT_BASELINE_MAX_ATTEMPTS,
+                         seconds=BASELINE_SECONDS, sample_fn=None):
+    """Takes and validates an idle-power baseline before it gets subtracted
+    into every record of a fixture's block (up to REPEATS * len(backends)
+    of them). A baseline recorded on a machine that had not finished
+    cooling from the previous fixture's block (throttled, or with
+    unreported thermal pressure, the same ambiguity evaluate_run guards
+    against for measured runs) silently corrupts all of them without a
+    single one tripping discarded on its own; a fanless MacBook Air after a
+    4K run makes this a realistic scenario, not a corner case. A raise from
+    sample_fn itself (a hung or failing powermetrics) is caught here too,
+    per the same rule as measure_once: a sampler failure becomes a
+    documented, retried condition, never a session-ending exception.
+
+    Retries up to max_attempts times, calling cool_and_retry() between
+    attempts to cool down further.
+
+    Returns (baseline, error). error is None when baseline is clean and
+    ready to subtract. When every attempt fails to produce a clean reading,
+    baseline is the last one actually obtained (or {} if sample_fn never
+    returned one at all) and error names why: callers must not subtract
+    this baseline, only record what happened.
+    """
+    sample_fn = sample_fn or sampler.sample_power
+    baseline = {}
+    error = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            baseline = sample_fn(seconds)
+        except Exception as exc:
+            error = f"sample_power raised: {exc}"
+            baseline = {}
+        else:
+            if baseline["throttled"]:
+                error = f"machine reported throttling (level={baseline['thermalPressure']}) while idle"
+            elif baseline["thermalPressure"] is None:
+                error = "thermal pressure was never reported during the idle baseline window"
+            elif baseline.get("samples", 0) < MIN_BASELINE_SAMPLES:
+                error = (f"idle baseline carried only {baseline.get('samples')} sample(s), "
+                         f"expected at least {MIN_BASELINE_SAMPLES}")
+            else:
+                return baseline, None
+        print(f"    idle baseline attempt {attempt}/{max_attempts} not clean ({error})")
+        if attempt < max_attempts:
+            cool_and_retry()
+    return baseline, error
+
+
 def launch(backend, fixture_path, report_path, cfg):
     if backend == "mpv":
         return subprocess.Popen(demote() + [str(ROOT / "Scripts/run-mpv.sh"), fixture_path,
@@ -339,7 +446,7 @@ def launch_with_retry(backend, fixture, fixture_path, report_path_for_attempt, c
     return None, None, attempts, None, reason
 
 
-def evaluate_run(power, report, load_error, process_error, backend, fixture, cfg):
+def evaluate_run(power, report, load_error, process_error, backend, fixture, cfg, baseline_error=None):
     """Every discard reason that applies to one measured window, combined
     rather than the last one overwriting the rest: a run that was both
     thermally throttled AND failed the frame gate must say so, not report
@@ -349,6 +456,13 @@ def evaluate_run(power, report, load_error, process_error, backend, fixture, cfg
     gate on.
     """
     reasons = []
+    if baseline_error:
+        # take_clean_baseline already refused to hand back an unclean
+        # baseline for subtraction (measure_once zeroes the subtracted
+        # power fields when this is set); this is what makes that fact
+        # visible on every record in the affected fixture's block instead
+        # of a bad number quietly appearing 15 times with discarded: false.
+        reasons.append(f"idle baseline was not clean: {baseline_error}")
     if power["throttled"]:
         reasons.append(f"SoC reported throttling during the window (level={power['thermalPressure']})")
     elif power["thermalPressure"] is None:
@@ -381,7 +495,7 @@ def evaluate_run(power, report, load_error, process_error, backend, fixture, cfg
     return reasons, frame_gate
 
 
-def measure_once(backend, fixture, repeat, baseline, cfg, launch_failures, report_dir):
+def measure_once(backend, fixture, repeat, baseline, cfg, launch_failures, report_dir, baseline_error=None):
     fixture_path = str(ROOT / "Fixtures" / fixture)
     stamp = int(time.time() * 1000)
 
@@ -409,20 +523,46 @@ def measure_once(backend, fixture, repeat, baseline, cfg, launch_failures, repor
 
     t = threading.Thread(target=proc_worker)
     t.start()
-    power = sampler.sample_power(cfg.measure)
-    t.join()
+    power = None
+    power_error = None
     try:
-        proc.wait(timeout=60)
-    except subprocess.TimeoutExpired:
-        print(f"    {backend}: player did not exit within 60s of the measurement window closing, killing")
-        proc.kill()
+        # sample_power is documented to raise, not return a plausible zero,
+        # on a hung or failing powermetrics. Unguarded, that raise would
+        # propagate out of measure_once, out of main()'s loop, and abort
+        # the whole multi-hour session, discarding every record already
+        # collected in memory. Guarded here, it becomes exactly what every
+        # other failure mode in this file already is: one discarded record
+        # with a reason, and the session keeps going.
+        power = sampler.sample_power(cfg.measure)
+    except Exception as exc:
+        power_error = str(exc)
+    finally:
+        # No path out of this block, success or exception, may leave the
+        # player running: t.join() first so proc_worker's ps reads never
+        # race a process this call is about to terminate out from under
+        # them, then terminate. A window abandoned early because power
+        # sampling failed gets a short grace period instead of the normal
+        # one, since there is no report worth waiting a full minute for.
+        t.join()
+        _terminate_player(proc, backend, wait_timeout=60 if power_error is None else 5)
+
+    if power_error is not None:
+        record.update(power=None, powerRaw=None, process=results.get("process"), report=None,
+                       frameGate=None, droppedFramesReported=None, discarded=True,
+                       discardReason=f"power sampling failed: {power_error}")
+        return record
 
     report, load_error = load_report(report_path)
     reasons, frame_gate = evaluate_run(power, report, load_error, results.get("processError"),
-                                        backend, fixture, cfg)
+                                        backend, fixture, cfg, baseline_error)
+
+    if baseline_error:
+        subtracted_power = {k: None for k in power}
+    else:
+        subtracted_power = {k: _baseline_subtract(k, power[k], baseline.get(k)) for k in power}
 
     record.update({
-        "power": {k: _baseline_subtract(k, power[k], baseline.get(k)) for k in power},
+        "power": subtracted_power,
         "powerRaw": power,
         "process": results.get("process"),
         "report": report,
@@ -492,6 +632,93 @@ def demote():
     return ["sudo", "-u", target]
 
 
+def write_results(out_path, payload):
+    """Atomic write: to a temp file in the same directory, then os.replace
+    over the real path. A reader, or this process getting killed mid-write,
+    never sees a torn/partial JSON file; the previous good write survives
+    on disk until the new one has landed completely. Called after every
+    completed record (see run_session), not once at the very end, so a
+    killed or crashed session leaves behind everything it had already
+    measured, never nothing.
+    """
+    out_path = pathlib.Path(out_path)
+    tmp = out_path.with_suffix(out_path.suffix + ".tmp")
+    with open(tmp, "w") as f:
+        json.dump(payload, f, indent=2, sort_keys=True)
+        f.write("\n")
+    os.replace(tmp, out_path)
+
+
+def run_session(cfg, fixtures, backends, output_dir, dry_run=False, report_dir=pathlib.Path("/tmp")):
+    """Runs the full matrix and returns the path it wrote. Split out of
+    main() so it can be driven without argparse/the root check, e.g. by a
+    caller that has already set up its own environment.
+    """
+    for f in fixtures:
+        if not (ROOT / "Fixtures" / f).exists():
+            print(f"warning: fixture does not exist on disk: {f} (runs against it will "
+                  f"be recorded as discarded launch failures, not silently skipped)")
+
+    launch_failures = {b: 0 for b in backends}
+    records = []
+
+    machine = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"],
+                              capture_output=True, text=True).stdout.strip().replace(" ", "-")
+    versions = engine_versions()
+    date = time.strftime("%Y-%m-%d")
+    os_version = subprocess.run(["sw_vers", "-productVersion"], capture_output=True, text=True).stdout.strip()
+    out_dir = pathlib.Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    suffix = "-dryrun" if dry_run else ""
+    out = out_dir / f"{machine}-{date}{suffix}.json"
+
+    # payload["runs"] IS records and payload["launchFailures"] IS
+    # launch_failures (same list/dict objects, not copies), so mutating
+    # either and re-calling write_results(out, payload) always serializes
+    # the latest state; nothing here needs to be reassembled per write.
+    payload = {
+        "machine": machine, "date": date, "versions": versions, "os": os_version,
+        "protocol": dataclasses.asdict(cfg), "launchFailures": launch_failures, "runs": records,
+    }
+    if dry_run:
+        payload["dryRun"] = True
+        payload["note"] = "shortened validation run (see --settle/--measure/--cooldown/--repeats), not published data"
+
+    write_results(out, payload)
+    print(f"results file: {out}")
+
+    for fixture_index, fixture in enumerate(fixtures):
+        print(f"=== {fixture}: idle baseline")
+        baseline, baseline_error = take_clean_baseline(cfg, cool_and_retry=lambda: time.sleep(cfg.cooldown))
+        if baseline_error:
+            print(f"  WARNING: {fixture}'s idle baseline never became clean after retries "
+                  f"({baseline_error}); this fixture's power figures will be marked unusable, "
+                  f"not silently subtracted")
+        for repeat in range(cfg.repeats):
+            # Rotation offset advances across the WHOLE session (fixture_index
+            # folded in), not just within one fixture's repeats: with a fixed
+            # `repeat % len(backends)` offset, the same backend always starts
+            # first at a given repeat index in every fixture's block, so
+            # accumulated thermal drift across the full multi-hour session
+            # would still slightly favor that backend's position.
+            offset = (fixture_index * cfg.repeats + repeat) % len(backends)
+            order = backends[offset:] + backends[:offset]
+            for backend in order:
+                if repeat == 0:
+                    print(f"  {backend}: cold throwaway run")
+                    measure_once(backend, fixture, -1, baseline, cfg, launch_failures, report_dir, baseline_error)
+                    write_results(out, payload)
+                    time.sleep(cfg.cooldown)
+                print(f"  {backend}: repeat {repeat}")
+                records.append(measure_once(backend, fixture, repeat, baseline, cfg, launch_failures,
+                                             report_dir, baseline_error))
+                write_results(out, payload)
+                time.sleep(cfg.cooldown)
+
+    print(f"wrote {out}")
+    return out
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--settle", type=float, default=15.0)
@@ -518,57 +745,7 @@ def main():
                           gate_threshold=args.gate_threshold)
     fixtures = [f for f in args.fixtures.split(",") if f]
     backends = [b for b in args.backends.split(",") if b]
-    for f in fixtures:
-        if not (ROOT / "Fixtures" / f).exists():
-            print(f"warning: fixture does not exist on disk: {f} (runs against it will "
-                  f"be recorded as discarded launch failures, not silently skipped)")
-
-    report_dir = pathlib.Path("/tmp")
-    launch_failures = {b: 0 for b in backends}
-    records = []
-    for fixture_index, fixture in enumerate(fixtures):
-        print(f"=== {fixture}: idle baseline")
-        baseline = sampler.sample_power(60)
-        for repeat in range(cfg.repeats):
-            # Rotation offset advances across the WHOLE session (fixture_index
-            # folded in), not just within one fixture's repeats: with a fixed
-            # `repeat % len(backends)` offset, the same backend always starts
-            # first at a given repeat index in every fixture's block, so
-            # accumulated thermal drift across the full multi-hour session
-            # would still slightly favor that backend's position.
-            offset = (fixture_index * cfg.repeats + repeat) % len(backends)
-            order = backends[offset:] + backends[:offset]
-            for backend in order:
-                if repeat == 0:
-                    print(f"  {backend}: cold throwaway run")
-                    measure_once(backend, fixture, -1, baseline, cfg, launch_failures, report_dir)
-                    time.sleep(cfg.cooldown)
-                print(f"  {backend}: repeat {repeat}")
-                records.append(measure_once(backend, fixture, repeat, baseline, cfg, launch_failures, report_dir))
-                time.sleep(cfg.cooldown)
-
-    machine = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"],
-                              capture_output=True, text=True).stdout.strip().replace(" ", "-")
-    versions = engine_versions()
-    date = time.strftime("%Y-%m-%d")
-    out_dir = pathlib.Path(args.output_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    suffix = "-dryrun" if args.dry_run else ""
-    out = out_dir / f"{machine}-{date}{suffix}.json"
-    payload = {
-        "machine": machine, "date": date, "versions": versions,
-        "os": subprocess.run(["sw_vers", "-productVersion"], capture_output=True, text=True).stdout.strip(),
-        "protocol": dataclasses.asdict(cfg),
-        "launchFailures": launch_failures,
-        "runs": records,
-    }
-    if args.dry_run:
-        payload["dryRun"] = True
-        payload["note"] = "shortened validation run (see --settle/--measure/--cooldown/--repeats), not published data"
-    with open(out, "w") as f:
-        json.dump(payload, f, indent=2, sort_keys=True)
-        f.write("\n")
-    print(f"wrote {out}")
+    run_session(cfg, fixtures, backends, args.output_dir, dry_run=args.dry_run)
 
 
 if __name__ == "__main__":
