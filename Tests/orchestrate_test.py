@@ -201,6 +201,19 @@ class EvaluateRunTests(unittest.TestCase):
         self.assertIn("report problem", reasons[0])
         self.assertIsNone(gate)
 
+    def test_unreported_thermal_pressure_is_not_treated_as_cool(self):
+        # sampler.py's own documented gotcha: throttled=False is ambiguous
+        # between "cool" and "no thermal reading at all"; thermalPressure
+        # is the only field that distinguishes them, so a None here must
+        # not be published as a silently-clean run.
+        unknown_thermal_power = dict(HEALTHY_POWER, thermalPressure=None, throttled=False)
+        reasons, gate = orchestrate.evaluate_run(
+            unknown_thermal_power, make_report(), None, None, "aether", "h264-1080p.mp4",
+            orchestrate.ProtocolConfig())
+        self.assertEqual(len(reasons), 1)
+        self.assertIn("thermal pressure was never reported", reasons[0])
+        self.assertTrue(gate["passed"])  # independent of the thermal gap
+
     def test_process_sampling_failure_combines_with_other_reasons(self):
         reasons, gate = orchestrate.evaluate_run(
             THROTTLED_POWER, make_report(), None, "pid 123 stopped responding",

@@ -351,6 +351,14 @@ def evaluate_run(power, report, load_error, process_error, backend, fixture, cfg
     reasons = []
     if power["throttled"]:
         reasons.append(f"SoC reported throttling during the window (level={power['thermalPressure']})")
+    elif power["thermalPressure"] is None:
+        # sampler.py's own contract: throttled is False both when the
+        # machine is cool AND when the thermal sampler produced no reading
+        # at all, and thermalPressure is the only thing that tells the two
+        # apart. A window this repo cannot confirm was thermally clean must
+        # not be published as if it had been.
+        reasons.append("thermal pressure was never reported during the window "
+                        "(cannot confirm this run was thermally clean)")
 
     frame_gate = None
     if load_error:
