@@ -16,7 +16,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "98AAE18330A8659487CFC451"
-               BuildableName = "AVBench.app"
+               BuildableName = "AVBench"
                BlueprintName = "AVBench"
                ReferencedContainer = "container:AetherBench.xcodeproj">
             </BuildableReference>
@@ -29,9 +29,9 @@
             buildForAnalyzing = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "8B929E60A02CB1DAA7952C8F"
-               BuildableName = "BenchHarnessTests.xctest"
-               BlueprintName = "BenchHarnessTests"
+               BlueprintIdentifier = "C1A2777983897ACB745E7BDC"
+               BuildableName = "AVBenchTests.xctest"
+               BlueprintName = "AVBenchTests"
                ReferencedContainer = "container:AetherBench.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -47,7 +47,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "98AAE18330A8659487CFC451"
-            BuildableName = "AVBench.app"
+            BuildableName = "AVBench"
             BlueprintName = "AVBench"
             ReferencedContainer = "container:AetherBench.xcodeproj">
          </BuildableReference>
@@ -58,9 +58,9 @@
             parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "8B929E60A02CB1DAA7952C8F"
-               BuildableName = "BenchHarnessTests.xctest"
-               BlueprintName = "BenchHarnessTests"
+               BlueprintIdentifier = "C1A2777983897ACB745E7BDC"
+               BuildableName = "AVBenchTests.xctest"
+               BlueprintName = "AVBenchTests"
                ReferencedContainer = "container:AetherBench.xcodeproj">
             </BuildableReference>
          </TestableReference>
@@ -83,7 +83,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "98AAE18330A8659487CFC451"
-            BuildableName = "AVBench.app"
+            BuildableName = "AVBench"
             BlueprintName = "AVBench"
             ReferencedContainer = "container:AetherBench.xcodeproj">
          </BuildableReference>
@@ -100,7 +100,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "98AAE18330A8659487CFC451"
-            BuildableName = "AVBench.app"
+            BuildableName = "AVBench"
             BlueprintName = "AVBench"
             ReferencedContainer = "container:AetherBench.xcodeproj">
          </BuildableReference>

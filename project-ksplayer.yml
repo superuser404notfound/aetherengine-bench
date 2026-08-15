@@ -14,16 +14,23 @@ packages:
     exactVersion: 2.3.4
 targets:
   KSBench:
-    type: application
+    type: tool
     platform: macOS
     sources:
       - path: Sources/Shared
       - path: Sources/Backends/KSPlayerBackend.swift
-    info:
-      path: Sources/Shared/Info.plist
-      properties:
-        CFBundleDisplayName: KSBench
-        LSMinimumSystemVersion: "14.0"
+    settings:
+      base:
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: BACKEND_KSPLAYER
+    dependencies:
+      - package: KSPlayer
+  KSBenchTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/KSBenchTests
+      - path: Sources/Shared
+      - path: Sources/Backends/KSPlayerBackend.swift
     settings:
       base:
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: BACKEND_KSPLAYER
@@ -34,3 +41,7 @@ schemes:
     build:
       targets:
         KSBench: all
+        KSBenchTests: [test]
+    test:
+      targets:
+        - KSBenchTests

@@ -24,77 +24,94 @@ packages:
     exactVersion: 4.0.0-alpha.21
 targets:
   AetherBench:
-    type: application
+    type: tool
     platform: macOS
     sources:
       - path: Sources/Shared
       - path: Sources/Backends/AetherBackend.swift
-    info:
-      path: Sources/Shared/Info.plist
-      properties:
-        CFBundleDisplayName: AetherBench
-        LSMinimumSystemVersion: "14.0"
-        NSAppTransportSecurity:
-          NSAllowsArbitraryLoads: true
+    settings:
+      base:
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: BACKEND_AETHER
+    dependencies:
+      - package: AetherEngine
+  AetherBenchTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/AetherBenchTests
+      - path: Sources/Shared
+      - path: Sources/Backends/AetherBackend.swift
     settings:
       base:
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: BACKEND_AETHER
     dependencies:
       - package: AetherEngine
   AVBench:
-    type: application
+    type: tool
     platform: macOS
     sources:
       - path: Sources/Shared
       - path: Sources/Backends/AVPlayerBackend.swift
-    info:
-      path: Sources/Shared/Info.plist
-      properties:
-        CFBundleDisplayName: AVBench
-        LSMinimumSystemVersion: "14.0"
+    settings:
+      base:
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: BACKEND_AVPLAYER
+  AVBenchTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/AVBenchTests
+      - path: Sources/Shared
+      - path: Sources/Backends/AVPlayerBackend.swift
     settings:
       base:
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: BACKEND_AVPLAYER
   VLCBench:
-    type: application
+    type: tool
     platform: macOS
     sources:
       - path: Sources/Shared
       - path: Sources/Backends/VLCKitBackend.swift
-    info:
-      path: Sources/Shared/Info.plist
-      properties:
-        CFBundleDisplayName: VLCBench
-        LSMinimumSystemVersion: "14.0"
-        NSAppTransportSecurity:
-          NSAllowsArbitraryLoads: true
     settings:
       base:
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: BACKEND_VLCKIT
     dependencies:
       - package: VLCKit
         product: VLCKitSPM
-  BenchHarnessTests:
+  VLCBenchTests:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - path: Tests/BenchHarnessTests
+      - path: Tests/VLCBenchTests
+      - path: Sources/Shared
+      - path: Sources/Backends/VLCKitBackend.swift
+    settings:
+      base:
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: BACKEND_VLCKIT
     dependencies:
-      - target: AVBench
+      - package: VLCKit
+        product: VLCKitSPM
 schemes:
   AetherBench:
     build:
       targets:
         AetherBench: all
+        AetherBenchTests: [test]
+    test:
+      targets:
+        - AetherBenchTests
   AVBench:
     build:
       targets:
         AVBench: all
-        BenchHarnessTests: [test]
+        AVBenchTests: [test]
     test:
       targets:
-        - BenchHarnessTests
+        - AVBenchTests
   VLCBench:
     build:
       targets:
         VLCBench: all
+        VLCBenchTests: [test]
+    test:
+      targets:
+        - VLCBenchTests

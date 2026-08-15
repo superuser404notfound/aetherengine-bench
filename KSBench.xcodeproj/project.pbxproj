@@ -8,15 +8,19 @@
 
 /* Begin PBXBuildFile section */
 		7D68C1FAF7802800AC59BB8B /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2FF16BBC99D3F91FB561598 /* main.swift */; };
+		A22AD30FB4F245D5F0AC01DA /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 845E200CFE86DB04DC0448A4 /* KSPlayer */; };
 		B740B13D4F5F71E8923447D8 /* KSPlayerBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FCE5A2D6E5875BF19F6A305 /* KSPlayerBackend.swift */; };
+		C38BEA48AAAD690D525879C8 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2FF16BBC99D3F91FB561598 /* main.swift */; };
+		D7E5C30721DF650C8D3D1BDB /* KSPlayerBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FCE5A2D6E5875BF19F6A305 /* KSPlayerBackend.swift */; };
 		EC8D2ED66180492B7CFB4946 /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 617A13E26F7FD450D4A6D9BA /* KSPlayer */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		05F6D26D96E61E397CAF62B9 /* KSBenchTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KSBenchTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		2E1DC22F66BE609C2F8BD2B4 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		2FCE5A2D6E5875BF19F6A305 /* KSPlayerBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KSPlayerBackend.swift; sourceTree = "<group>"; };
-		30D660B4F42C636E5E45C888 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		8B1F804C2DF5EEC316779A62 /* KSBench */ = {isa = PBXFileReference; includeInIndex = 0; path = KSBench; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2FF16BBC99D3F91FB561598 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
-		CC7CD3216D5D5AFE2B558CE4 /* KSBench.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KSBench.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -28,13 +32,20 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		30630A2060198E78079FD2E8 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A22AD30FB4F245D5F0AC01DA /* KSPlayer in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		3F1DBDD5308E6FC53A4B3BA1 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
-				30D660B4F42C636E5E45C888 /* Info.plist */,
 				A2FF16BBC99D3F91FB561598 /* main.swift */,
 			);
 			path = Shared;
@@ -43,9 +54,18 @@
 		532585D6B6EEE49216AED7AE /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				CC7CD3216D5D5AFE2B558CE4 /* KSBench.app */,
+				8B1F804C2DF5EEC316779A62 /* KSBench */,
+				05F6D26D96E61E397CAF62B9 /* KSBenchTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		57F508D47F26F301FF4C45F7 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				B3F2AE7402D9998C04A1CC0C /* KSBenchTests */,
+			);
+			path = Tests;
 			sourceTree = "<group>";
 		};
 		83A57A049192A993E8253FCB /* Sources */ = {
@@ -61,8 +81,17 @@
 			isa = PBXGroup;
 			children = (
 				83A57A049192A993E8253FCB /* Sources */,
+				57F508D47F26F301FF4C45F7 /* Tests */,
 				532585D6B6EEE49216AED7AE /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		B3F2AE7402D9998C04A1CC0C /* KSBenchTests */ = {
+			isa = PBXGroup;
+			children = (
+				2E1DC22F66BE609C2F8BD2B4 /* .gitkeep */,
+			);
+			path = KSBenchTests;
 			sourceTree = "<group>";
 		};
 		E07BC387278C9E69B94782EB /* Backends */ = {
@@ -92,8 +121,27 @@
 				617A13E26F7FD450D4A6D9BA /* KSPlayer */,
 			);
 			productName = KSBench;
-			productReference = CC7CD3216D5D5AFE2B558CE4 /* KSBench.app */;
-			productType = "com.apple.product-type.application";
+			productReference = 8B1F804C2DF5EEC316779A62 /* KSBench */;
+			productType = "com.apple.product-type.tool";
+		};
+		4367CB8ADFCDAFD7EE2047F4 /* KSBenchTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0DDD59A06D7DCA48E436D55E /* Build configuration list for PBXNativeTarget "KSBenchTests" */;
+			buildPhases = (
+				006F7EA78B320D567275F87C /* Sources */,
+				30630A2060198E78079FD2E8 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = KSBenchTests;
+			packageProductDependencies = (
+				845E200CFE86DB04DC0448A4 /* KSPlayer */,
+			);
+			productName = KSBenchTests;
+			productReference = 05F6D26D96E61E397CAF62B9 /* KSBenchTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -124,11 +172,21 @@
 			projectRoot = "";
 			targets = (
 				3823D08A4AFCE35E00E1440B /* KSBench */,
+				4367CB8ADFCDAFD7EE2047F4 /* KSBenchTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXSourcesBuildPhase section */
+		006F7EA78B320D567275F87C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D7E5C30721DF650C8D3D1BDB /* KSPlayerBackend.swift in Sources */,
+				C38BEA48AAAD690D525879C8 /* main.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		E8E9907AD525269BF6AFD806 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -141,12 +199,42 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
+		00871D6730ACA981CB858744 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = de.superuser404.KSBenchTests;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = BACKEND_KSPLAYER;
+			};
+			name = Debug;
+		};
+		33DF890E124BAFF56B95F77F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = de.superuser404.KSBenchTests;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = BACKEND_KSPLAYER;
+			};
+			name = Release;
+		};
 		ABF9B849E7BBBD1F306CBE4D /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				COMBINE_HIDPI_IMAGES = YES;
-				INFOPLIST_FILE = Sources/Shared/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -160,9 +248,7 @@
 		BD75E3655A59AB41E2EDDA22 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				COMBINE_HIDPI_IMAGES = YES;
-				INFOPLIST_FILE = Sources/Shared/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -297,6 +383,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		0DDD59A06D7DCA48E436D55E /* Build configuration list for PBXNativeTarget "KSBenchTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				00871D6730ACA981CB858744 /* Debug */,
+				33DF890E124BAFF56B95F77F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		1A1FE87274DD0896F906AF63 /* Build configuration list for PBXNativeTarget "KSBench" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -330,6 +425,11 @@
 
 /* Begin XCSwiftPackageProductDependency section */
 		617A13E26F7FD450D4A6D9BA /* KSPlayer */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F683558C7F93FA7416D0A4F4 /* XCRemoteSwiftPackageReference "KSPlayer" */;
+			productName = KSPlayer;
+		};
+		845E200CFE86DB04DC0448A4 /* KSPlayer */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = F683558C7F93FA7416D0A4F4 /* XCRemoteSwiftPackageReference "KSPlayer" */;
 			productName = KSPlayer;

@@ -16,8 +16,22 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "E19F2AD754868B1700CA6FBF"
-               BuildableName = "AetherBench.app"
+               BuildableName = "AetherBench"
                BlueprintName = "AetherBench"
+               ReferencedContainer = "container:AetherBench.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "D5E3ACE82C43E88C15A84296"
+               BuildableName = "AetherBenchTests.xctest"
+               BlueprintName = "AetherBenchTests"
                ReferencedContainer = "container:AetherBench.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -33,13 +47,26 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "E19F2AD754868B1700CA6FBF"
-            BuildableName = "AetherBench.app"
+            BuildableName = "AetherBench"
             BlueprintName = "AetherBench"
             ReferencedContainer = "container:AetherBench.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
       <Testables>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "D5E3ACE82C43E88C15A84296"
+               BuildableName = "AetherBenchTests.xctest"
+               BlueprintName = "AetherBenchTests"
+               ReferencedContainer = "container:AetherBench.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
+      <CommandLineArguments>
+      </CommandLineArguments>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
@@ -56,7 +83,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "E19F2AD754868B1700CA6FBF"
-            BuildableName = "AetherBench.app"
+            BuildableName = "AetherBench"
             BlueprintName = "AetherBench"
             ReferencedContainer = "container:AetherBench.xcodeproj">
          </BuildableReference>
@@ -73,7 +100,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "E19F2AD754868B1700CA6FBF"
-            BuildableName = "AetherBench.app"
+            BuildableName = "AetherBench"
             BlueprintName = "AetherBench"
             ReferencedContainer = "container:AetherBench.xcodeproj">
          </BuildableReference>

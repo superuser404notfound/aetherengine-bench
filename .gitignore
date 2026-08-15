@@ -1,6 +1,7 @@
 .DS_Store
 *.xcodeproj/xcuserdata/
 .build/
+.build-ks/
 DerivedData/
 Fixtures/*.mov
 Fixtures/*.zip

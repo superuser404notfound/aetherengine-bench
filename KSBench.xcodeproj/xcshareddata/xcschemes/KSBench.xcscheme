@@ -16,8 +16,22 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "3823D08A4AFCE35E00E1440B"
-               BuildableName = "KSBench.app"
+               BuildableName = "KSBench"
                BlueprintName = "KSBench"
+               ReferencedContainer = "container:KSBench.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "4367CB8ADFCDAFD7EE2047F4"
+               BuildableName = "KSBenchTests.xctest"
+               BlueprintName = "KSBenchTests"
                ReferencedContainer = "container:KSBench.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -33,13 +47,26 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "3823D08A4AFCE35E00E1440B"
-            BuildableName = "KSBench.app"
+            BuildableName = "KSBench"
             BlueprintName = "KSBench"
             ReferencedContainer = "container:KSBench.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
       <Testables>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "4367CB8ADFCDAFD7EE2047F4"
+               BuildableName = "KSBenchTests.xctest"
+               BlueprintName = "KSBenchTests"
+               ReferencedContainer = "container:KSBench.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
+      <CommandLineArguments>
+      </CommandLineArguments>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
@@ -56,7 +83,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "3823D08A4AFCE35E00E1440B"
-            BuildableName = "KSBench.app"
+            BuildableName = "KSBench"
             BlueprintName = "KSBench"
             ReferencedContainer = "container:KSBench.xcodeproj">
          </BuildableReference>
@@ -73,7 +100,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "3823D08A4AFCE35E00E1440B"
-            BuildableName = "KSBench.app"
+            BuildableName = "KSBench"
             BlueprintName = "KSBench"
             ReferencedContainer = "container:KSBench.xcodeproj">
          </BuildableReference>
