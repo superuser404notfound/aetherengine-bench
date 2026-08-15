@@ -1,0 +1,61 @@
+name: AetherBench
+options:
+  bundleIdPrefix: de.superuser404
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ARCHS: "$(ARCHS_STANDARD)"
+  configs:
+    Debug:
+      ONLY_ACTIVE_ARCH: YES
+    Release:
+      ONLY_ACTIVE_ARCH: NO
+packages:
+  AetherEngine:
+    url: https://github.com/superuser404notfound/AetherEngine
+    revision: 73354ec8c6d20ca954b1874254b69fa19e2ffce5
+  VLCKit:
+    url: https://github.com/virtualox/vlckit-spm
+    exactVersion: 4.0.0-alpha.21
+  KSPlayer:
+    url: https://github.com/kingslay/KSPlayer
+    exactVersion: 2.3.4
+targets:
+  BenchHarness:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/BenchHarness
+    info:
+      path: Sources/BenchHarness/Info.plist
+      properties:
+        CFBundleDisplayName: AetherBench
+        LSMinimumSystemVersion: "14.0"
+        LSUIElement: false
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+    dependencies:
+      - package: AetherEngine
+      - package: VLCKit
+      - package: KSPlayer
+  BenchHarnessTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/BenchHarnessTests
+    dependencies:
+      - target: BenchHarness
+schemes:
+  BenchHarness:
+    build:
+      targets:
+        BenchHarness: all
+        BenchHarnessTests: [test]
+    test:
+      targets:
+        - BenchHarnessTests

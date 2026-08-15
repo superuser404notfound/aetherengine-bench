@@ -1,0 +1,68 @@
+{
+  "originHash" : "8163fca1f16681dcf0c2c38448f9b5130fb7f6ede8fee8461c2714eab07861bf",
+  "pins" : [
+    {
+      "identity" : "aetherengine",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/superuser404notfound/AetherEngine",
+      "state" : {
+        "revision" : "73354ec8c6d20ca954b1874254b69fa19e2ffce5"
+      }
+    },
+    {
+      "identity" : "ffmpegbuild",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/superuser404notfound/FFmpegBuild",
+      "state" : {
+        "revision" : "35f393fd588b7fa14452c3b4cc5d7c40e472c5e3",
+        "version" : "2.4.2"
+      }
+    },
+    {
+      "identity" : "ffmpegkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/kingslay/FFmpegKit.git",
+      "state" : {
+        "revision" : "c32be9bfb628042737ad3ef622e930c5c7b15954",
+        "version" : "6.1.4"
+      }
+    },
+    {
+      "identity" : "ksplayer",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/kingslay/KSPlayer",
+      "state" : {
+        "revision" : "bdfa2da39bb18865b317c4ffd08cdef5f8efc043",
+        "version" : "2.3.4"
+      }
+    },
+    {
+      "identity" : "libdovi",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/superuser404notfound/LibDovi",
+      "state" : {
+        "revision" : "89be93431c2a5f2e54fb77e93059071b8d2ddb3a",
+        "version" : "2.0.0"
+      }
+    },
+    {
+      "identity" : "smbclient",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/kishikawakatsumi/SMBClient",
+      "state" : {
+        "revision" : "e636c2b2458930770932a36d311ec9d478575b90",
+        "version" : "0.3.1"
+      }
+    },
+    {
+      "identity" : "vlckit-spm",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/virtualox/vlckit-spm",
+      "state" : {
+        "revision" : "d519d72b6da0c790791a20c0f43a8fef1c394e78",
+        "version" : "4.0.0-alpha.21"
+      }
+    }
+  ],
+  "version" : 3
+}

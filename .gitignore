@@ -1,0 +1,10 @@
+.DS_Store
+*.xcodeproj/xcuserdata/
+.build/
+DerivedData/
+Fixtures/*.mov
+Fixtures/*.zip
+Fixtures/master/
+Fixtures/*.mp4
+Fixtures/*.mkv
+Fixtures/*.webm
