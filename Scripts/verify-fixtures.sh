@@ -5,6 +5,7 @@ cd "$(dirname "$0")/../Fixtures"
 fail=0
 check() { # file, ffprobe query, expected substring
   local got
+  [ -f "$1" ] || { echo "FAIL $1: file missing"; fail=1; return; }
   got=$(ffprobe -v error -select_streams "$2" -show_entries "$3" -of csv=p=0 "$1" 2>/dev/null | head -1)
   if [[ "$got" != *"$4"* ]]; then echo "FAIL $1: $3 = '$got', expected '$4'"; fail=1
   else echo "ok   $1: $4"; fi
@@ -41,10 +42,13 @@ check eac3-51.mp4       a:0 stream=channels            6
 dv=$(ffprobe -v error -select_streams v:0 -show_streams -of json dv-p81.mp4 2>/dev/null |
   python3 -c '
 import json, sys
-s = json.load(sys.stdin)["streams"][0]
-d = next((x for x in s.get("side_data_list", []) if x.get("side_data_type") == "DOVI configuration record"), None)
-print("none" if d is None else "%s/%s/%s" % (d["dv_profile"], d["rpu_present_flag"], d["dv_bl_signal_compatibility_id"]))
-')
+try:
+    s = json.load(sys.stdin)["streams"][0]
+    d = next((x for x in s.get("side_data_list", []) if x.get("side_data_type") == "DOVI configuration record"), None)
+    print("none" if d is None else "%s/%s/%s" % (d["dv_profile"], d["rpu_present_flag"], d["dv_bl_signal_compatibility_id"]))
+except Exception:
+    print("unreadable")
+' 2>/dev/null)
 if [ "$dv" = "8/1/1" ]; then echo "ok   dv-p81.mp4: DOVI profile 8.1, RPU present"
 else echo "FAIL dv-p81.mp4: DOVI record = '$dv', expected '8/1/1'"; fail=1; fi
 exit $fail

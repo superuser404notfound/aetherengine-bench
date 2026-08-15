@@ -5,8 +5,10 @@
 # only 734 s long, so a late start silently produces a stub, and a run needs
 # 15 s settle plus 60 s measure, so anything under 90 s ends mid-measurement.
 set -euo pipefail
+# Fixtures/ is gitignored (media is rebuilt, never committed), so on a fresh
+# clone the directory does not exist yet. Create it before entering it.
+mkdir -p "$(dirname "$0")/../Fixtures/master"
 cd "$(dirname "$0")/../Fixtures"
-mkdir -p master
 
 BASE="https://download.blender.org/demo/movies/ToS"
 CUT="-ss 240 -t 120"
@@ -15,6 +17,7 @@ if [ ! -f master/tearsofsteel_4k.mov ]; then
   curl -L -o master/tos4k.zip "$BASE/tearsofsteel_4k.mov.zip"
   unzip -o master/tos4k.zip -d master/
   mv master/*4k*.mov master/tearsofsteel_4k.mov
+  rm -f master/tos4k.zip   # 6.4 GB, and the unpacked master is what we need
 fi
 if [ ! -f master/surround.ac3 ]; then
   curl -L -o master/surround.ac3 "$BASE/Surround-TOS_DVDSURROUND-Dolby%205.1.ac3"
@@ -51,7 +54,7 @@ ffmpeg -y $CUT -i "$M" -vf scale=1920:-2 -c:v libvpx-vp9 -b:v 4M -row-mt 1 -dead
 
 # 5. HEVC in MKV with SRT and ASS subtitles. Container breadth plus text subtitle cost.
 #    ffmpeg cannot encode PGS, so bitmap subtitles are out of the public set.
-printf '1\n00:00:02,000 --> 00:00:88,000\nBenchmark subtitle line\n\n' > subs.srt
+printf '1\n00:00:02,000 --> 00:01:58,000\nBenchmark subtitle line\n\n' > subs.srt
 ffmpeg -y -i subs.srt subs.ass
 ffmpeg -y $CUT -i "$M" -i subs.srt -i subs.ass -vf scale=1920:-2 \
   -c:v libx265 -preset fast -crf 20 -pix_fmt yuv420p \
