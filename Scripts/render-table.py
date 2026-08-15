@@ -254,9 +254,14 @@ def render(results, fixture="hevc-4k-hdr10.mp4"):
     versions = ", ".join(f"{name} {resolved.get(key, 'unresolved')}" for key, name in NAMES.items())
     lines.append(f"Versions: {versions}.")
 
-    launch_failures = {b: n for b, n in (results.get("launchFailures") or {}).items() if n}
+    raw_launch_failures = results.get("launchFailures") or {}
+    # Iterate in the table's own backend order (README order), not whatever
+    # order the JSON's launchFailures dict happens to carry: orchestrate.py
+    # builds it from an internal BACKENDS list unrelated to README order.
+    launch_failures = [(name, raw_launch_failures[b]) for b, name in NAMES.items()
+                       if raw_launch_failures.get(b)]
     if launch_failures:
-        fails = ", ".join(f"{NAMES.get(b, b)} {n}" for b, n in launch_failures.items())
+        fails = ", ".join(f"{name} {n}" for name, n in launch_failures)
         lines += [
             "",
             "Launch failures during this session (the process crashed or refused to become "

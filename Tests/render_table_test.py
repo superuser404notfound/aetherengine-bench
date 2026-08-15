@@ -189,6 +189,15 @@ class ThermalAndLaunchFailureTests(unittest.TestCase):
         self.assertIn("Launch failures", out)
         self.assertIn("KSPlayer 15", out)
 
+    def test_launch_failures_follow_the_tables_own_backend_order(self):
+        # The fixture's raw launchFailures dict lists vlckit before ksplayer
+        # (orchestrate.py's internal BACKENDS order); the rendered line must
+        # follow the table's own README-matching order (KSPlayer before
+        # VLCKit) instead of just echoing whatever the JSON happened to have.
+        out = render_table.render(self.data)
+        line = next(l for l in out.splitlines() if l.startswith("Launch failures"))
+        self.assertLess(line.index("KSPlayer"), line.index("VLCKit"))
+
     def test_a_backend_never_run_against_a_fixture_says_so(self):
         out = render_table.render(self.data, fixture="h264-1080p.mp4")
         line = next(l for l in out.splitlines() if l.startswith("| **AetherEngine**"))
