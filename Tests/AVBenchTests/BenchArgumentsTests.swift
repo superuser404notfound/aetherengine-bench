@@ -65,7 +65,7 @@ import Foundation
         backend: "aether", engineVersion: "6.26.0", fixture: "av1-10bit.mkv",
         deliveredFrames: 2160, droppedFrames: 0, expectedFrames: 2160,
         output: OutputInfo(width: 1920, height: 804, bitDepth: 10, colorTransfer: "bt709", audioChannels: 2),
-        startedAt: Date(timeIntervalSince1970: 0), endedAt: Date(timeIntervalSince1970: 75))
+        startedAt: Date(timeIntervalSince1970: 0), endedAt: Date(timeIntervalSince1970: 75), servingPath: nil)
     let data = try JSONEncoder.bench.encode(report)
     let back = try JSONDecoder.bench.decode(BenchReport.self, from: data)
     #expect(back.deliveredFrames == 2160)

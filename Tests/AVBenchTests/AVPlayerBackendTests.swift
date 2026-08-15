@@ -66,7 +66,6 @@ import AVFoundation
     } catch BackendError.unsupportedFormat(let reason) {
         #expect(!reason.isEmpty)
     } catch {
-        Issue.record("expected BackendError.unsupportedFormat, got \(error) (a crash-shaped case here " +
-                     "would mean this AV1 fixture is now being misreported as a malfunction, not a refusal)")
+        Issue.record("expected BackendError.unsupportedFormat, got \(error) (a crash-shaped case here would mean this AV1 fixture is now being misreported as a malfunction, not a refusal)")
     }
 }
