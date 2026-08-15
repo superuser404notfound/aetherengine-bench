@@ -76,6 +76,14 @@ targets:
     settings:
       base:
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: BACKEND_VLCKIT
+        # VLCKit ships as a binary xcframework, not source, so it has no
+        # "Embed Frameworks" phase to lean on the way an app target would.
+        # SwiftPM stages VLCKit.framework into the same directory as this
+        # tool's own executable (BUILT_PRODUCTS_DIR), but none of the
+        # default rpaths point there, so the built binary dyld-fails outside
+        # Xcode's own test harness (which has its own framework search
+        # paths). @executable_path covers exactly that directory.
+        LD_RUNPATH_SEARCH_PATHS: ["$(inherited)", "@executable_path"]
     dependencies:
       - package: VLCKit
         product: VLCKitSPM

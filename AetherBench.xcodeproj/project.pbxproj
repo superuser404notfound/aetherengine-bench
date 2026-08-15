@@ -19,6 +19,7 @@
 		1EA9051311FCF449415FE100 /* BenchArguments.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CAA105AA118C8B8928E5A4 /* BenchArguments.swift */; };
 		1FF61BF550BD2213EA80EFA0 /* AetherBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01EC7F4D6CCE785DA4637BBA /* AetherBackend.swift */; };
 		232243E6F837050980B50C23 /* BackendFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03AC06AB3B9295795DF1AA8E /* BackendFactory.swift */; };
+		28A10C9B10CED05653323B30 /* VLCKitBackendTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE2394D04620FF3365B09DA0 /* VLCKitBackendTests.swift */; };
 		2EB61026F5E5147A2B061961 /* AetherBackendTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDF3D3FCA8938D44559A0074 /* AetherBackendTests.swift */; };
 		33E3797F81BB39FD2A715E21 /* BenchReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3383D8D5A4DB82104534436D /* BenchReport.swift */; };
 		34F7950E02E77B474A631D87 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1C4DB1FEC7C68EDEFDD27 /* main.swift */; };
@@ -82,6 +83,7 @@
 		D103E6CBC42AF0C4090E92E1 /* BenchArgumentsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BenchArgumentsTests.swift; sourceTree = "<group>"; };
 		DCC1AAB7E0DBFFF9C9914D32 /* BenchWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BenchWindow.swift; sourceTree = "<group>"; };
 		DDF3D3FCA8938D44559A0074 /* AetherBackendTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AetherBackendTests.swift; sourceTree = "<group>"; };
+		DE2394D04620FF3365B09DA0 /* VLCKitBackendTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VLCKitBackendTests.swift; sourceTree = "<group>"; };
 		E4A84D4E1CD324E00F8E6010 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		E4CE92192C20DF62D27EFF43 /* VLCKitBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VLCKitBackend.swift; sourceTree = "<group>"; };
 		E9CAA105AA118C8B8928E5A4 /* BenchArguments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BenchArguments.swift; sourceTree = "<group>"; };
@@ -176,6 +178,7 @@
 			isa = PBXGroup;
 			children = (
 				930E50D58D9ADD8334625133 /* .gitkeep */,
+				DE2394D04620FF3365B09DA0 /* VLCKitBackendTests.swift */,
 			);
 			path = VLCBenchTests;
 			sourceTree = "<group>";
@@ -443,6 +446,7 @@
 				E087B139A707A958390DFCD3 /* BenchRunner.swift in Sources */,
 				C779D8A0A4CC7B53203E2C2F /* BenchWindow.swift in Sources */,
 				FC431FC04EE8E84738897514 /* VLCKitBackend.swift in Sources */,
+				28A10C9B10CED05653323B30 /* VLCKitBackendTests.swift in Sources */,
 				08E23763E283E52610D2229F /* main.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -631,7 +635,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
-					"@executable_path/../Frameworks",
+					"@executable_path",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = de.superuser404.VLCBench;
 				SDKROOT = macosx;
@@ -710,7 +714,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
-					"@executable_path/../Frameworks",
+					"@executable_path",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = de.superuser404.VLCBench;
 				SDKROOT = macosx;
