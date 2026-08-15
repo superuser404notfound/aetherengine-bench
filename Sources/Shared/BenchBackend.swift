@@ -8,6 +8,16 @@ enum BackendError: Error, CustomStringConvertible {
     case noOutputDescription
     case notImplemented(BackendKind)
     case wrongBinary(asked: BackendKind)
+    /// A deterministic "this engine does not support this source" refusal,
+    /// not a malfunction: AVPlayer has no AV1 decoder at all, KSPlayer's
+    /// free GPL build gates AV1 behind a paid tier. Kept distinct from
+    /// every other BackendError case so BenchRunner can exit with a
+    /// distinct code (see REFUSAL_EXIT_CODE in orchestrate.py) instead of
+    /// the generic crash exit, and the orchestrator can record it once,
+    /// with its reason, instead of retrying a launch that was never going
+    /// to succeed and instead of publishing a real capability gap as a
+    /// crash, a false statement about the engine.
+    case unsupportedFormat(String)
 
     var description: String {
         switch self {
@@ -15,6 +25,7 @@ enum BackendError: Error, CustomStringConvertible {
         case .noOutputDescription: return "engine never reported an output format"
         case .notImplemented(let kind): return "backend \(kind.rawValue) is a stub, not implemented yet"
         case .wrongBinary(let kind): return "this binary does not carry backend \(kind.rawValue)"
+        case .unsupportedFormat(let reason): return "engine refuses this source: \(reason)"
         }
     }
 }

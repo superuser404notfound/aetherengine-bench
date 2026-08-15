@@ -12,4 +12,16 @@ for scheme in AetherBench AVBench VLCBench; do
 done
 xcodebuild -project KSBench.xcodeproj -scheme KSBench \
   -configuration Release -derivedDataPath .build-ks build
+
+# Four back-to-back xcodebuild invocations leave the machine well above
+# idle (measured live: 530.5 mW CPU right after, against this machine's
+# genuine ~150 mW floor). take_clean_baseline's own magnitude/stability
+# retry loop is the real backstop and keeps retrying regardless, but
+# starting it the instant the build finishes wastes its first attempts on
+# a machine that is obviously still busy, and 15 records get subtracted
+# against whatever it settles on. This just gives it a head start.
+QUIET_PERIOD_SECONDS=120
+echo "run-bench.sh: build finished, cooling down ${QUIET_PERIOD_SECONDS}s before the first idle baseline"
+sleep "$QUIET_PERIOD_SECONDS"
+
 caffeinate -dimsu python3 Scripts/orchestrate.py "$@"

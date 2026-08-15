@@ -26,8 +26,14 @@ final class AVPlayerBackend: BenchBackend {
         self.item = item
         player.replaceCurrentItem(with: item)
 
-        let videoTracks = try await asset.loadTracks(withMediaType: .video)
-        let audioTracks = try await asset.loadTracks(withMediaType: .audio)
+        let videoTracks: [AVAssetTrack]
+        let audioTracks: [AVAssetTrack]
+        do {
+            videoTracks = try await asset.loadTracks(withMediaType: .video)
+            audioTracks = try await asset.loadTracks(withMediaType: .audio)
+        } catch {
+            throw Self.classify(error)
+        }
         // No usable video track means there is nothing to measure. Returning
         // quietly here would let the runner play silence for the full window and
         // write a report full of zeroes that reads like a real measurement.
@@ -54,6 +60,28 @@ final class AVPlayerBackend: BenchBackend {
         guard nominalFrameRate > 0 else { throw BackendError.noOutputDescription }
         loadedOutput = OutputInfo(width: Int(dimensions.width), height: Int(dimensions.height),
                                   bitDepth: depth, colorTransfer: transfer, audioChannels: channels)
+    }
+
+    /// AVFoundation throws a plain NSError, not a typed BackendError, when
+    /// it recognizes a container but has no decoder for the codec inside
+    /// it: verified live against this repo's own av1-10bit.mkv fixture,
+    /// AVFoundationErrorDomain code -11828 ("Cannot Open"),
+    /// localizedFailureReason "This media format is not supported." That is
+    /// AVPlayer correctly and deterministically refusing a format it was
+    /// never going to support (it has no AV1 decoder at all), not a crash;
+    /// see BackendError.unsupportedFormat for why that distinction matters
+    /// downstream. Matched on domain plus the localizedFailureReason
+    /// substring rather than the numeric code alone, since that is the
+    /// specific, human-readable signal actually observed and the code's
+    /// exact named case was not confirmed independently. Any other thrown
+    /// error is a genuine, unclassified failure and passes through
+    /// unchanged, still a crash as far as this binary is concerned.
+    private static func classify(_ error: Error) -> Error {
+        let nsError = error as NSError
+        guard nsError.domain == AVFoundationErrorDomain,
+              (nsError.localizedFailureReason ?? "").localizedCaseInsensitiveContains("not supported")
+        else { return error }
+        return BackendError.unsupportedFormat(nsError.localizedFailureReason ?? nsError.localizedDescription)
     }
 
     func play() { player.play() }

@@ -200,17 +200,33 @@ private func runKSBenchExpectingSuccess(fixture name: String, settle: TimeInterv
 // There is no other public accessor for coded dimensions on
 // MediaPlayerTrack to fall back to, so the backend refusing the session
 // is the free build's honest, real behavior, not a bug to route around.
-// BenchRunner exits 1 and writes no report on any load() failure, so this
-// asserts exactly that: nonzero exit, no report, and the specific stderr
-// message either guard produces.
+// This is specifically BackendError.unsupportedFormat, a deterministic
+// refusal, not a malfunction, so BenchRunner exits with the distinct
+// REFUSAL exit code (3) and a "bench refused: ..." line, not the generic
+// crash exit(1)/"bench failed: ...", and orchestrate.py records it once
+// instead of retrying it five times as a flaky crash.
+//
+// The OTHER, unrelated non-determinism this file documents elsewhere
+// (readyToPlay itself sometimes never fires for either candidate, on this
+// same fixture) is a real, separate failure mode neither guard above
+// catches: when it happens, load() throws the earlier, generic
+// BackendError.noVideoTrack instead (still exit(1), "bench failed:
+// source has no usable video track"), which is correctly NOT reclassified
+// as a refusal (it says nothing about the codec, since no candidate ever
+// got far enough to inspect one). Both outcomes are accepted here rather
+// than only one, since which one fires on a given launch is exactly the
+// non-determinism already documented; either is a real, honest failure
+// mode, never a fabricated result.
 @Test func ksplayerBackendRefusesAV1InFreeGPLBuild() throws {
     let result = try runKSBench(fixture: "av1-10bit.mkv", settle: 3, measure: 5)
-    #expect(result.exitCode == 1)
     #expect(result.report == nil, "expected no report written for a refused load")
-    #expect(
-        result.stderr.contains("engine never reported an output format")
-            || result.stderr.contains("source has no usable video track"),
-        "unexpected stderr: \(result.stderr)")
+    if result.exitCode == BenchExitCode.refused {
+        #expect(result.stderr.contains("bench refused:"))
+        #expect(result.stderr.contains("no decodable format description"))
+    } else {
+        #expect(result.exitCode == BenchExitCode.crashed, "unexpected exit code, stderr: \(result.stderr)")
+        #expect(result.stderr.contains("source has no usable video track"), "unexpected stderr: \(result.stderr)")
+    }
 }
 
 // Companion to ksplayerBackendRefusesAV1InFreeGPLBuild: proves the MKV

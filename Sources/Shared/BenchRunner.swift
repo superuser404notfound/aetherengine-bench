@@ -1,5 +1,18 @@
 import AppKit
 
+/// Exit codes BenchRunner can produce beyond the default 0 for success.
+/// Mirrored by orchestrate.py's REFUSAL_EXIT_CODE, which is the only one
+/// of these three the orchestrator treats specially: a refusal is
+/// recorded once with its reason and not retried, everything else
+/// (including wrongBinary, which should never happen given how
+/// orchestrate.py picks a binary per backend) is a crash and keeps the
+/// existing retry-and-count behavior.
+enum BenchExitCode {
+    static let crashed: Int32 = 1
+    static let wrongBinary: Int32 = 2
+    static let refused: Int32 = 3
+}
+
 @MainActor
 final class BenchRunner {
     private let arguments: BenchArguments
@@ -10,7 +23,7 @@ final class BenchRunner {
         do { backend = try makeBackend(for: arguments.backend) } catch {
             FileHandle.standardError.write(
                 "this binary does not carry backend \(arguments.backend.rawValue)\n".data(using: .utf8)!)
-            exit(2)
+            exit(BenchExitCode.wrongBinary)
         }
         _ = BenchWindow.make(size: arguments.windowSize, displayIndex: arguments.displayIndex, hosting: backend.view)
         do {
@@ -46,9 +59,21 @@ final class BenchRunner {
                 servingPath: backend.servingPath)
             try JSONEncoder.bench.encode(report).write(to: arguments.reportURL)
             backend.stop()
+        } catch let error as BackendError {
+            if case .unsupportedFormat(let reason) = error {
+                // A deterministic capability gap, not a malfunction: distinct
+                // exit code so orchestrate.py can record it once, with this
+                // reason, instead of burning max_launch_attempts on an
+                // outcome that was never going to change and instead of
+                // publishing it as a crash, a false statement about the engine.
+                FileHandle.standardError.write("bench refused: \(reason)\n".data(using: .utf8)!)
+                exit(BenchExitCode.refused)
+            }
+            FileHandle.standardError.write("bench failed: \(error)\n".data(using: .utf8)!)
+            exit(BenchExitCode.crashed)
         } catch {
             FileHandle.standardError.write("bench failed: \(error)\n".data(using: .utf8)!)
-            exit(1)
+            exit(BenchExitCode.crashed)
         }
     }
 }

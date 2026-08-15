@@ -371,6 +371,12 @@ class SampleProcessTests(unittest.TestCase):
             sampler.sample_process(pid, 1, interval=0.2)
 
     def test_process_exiting_mid_window_raises_not_partial_success(self):
+        # Killed at 0.6s wanting a target of round(3/0.3)=10 samples: far
+        # too early to have collected them, so this must still fail loudly.
+        # Whether the process is fully gone or still a not-yet-reaped
+        # zombie by the time the next read lands is itself a race (a
+        # separate, pre-existing one in _read_ps, not this fix), so this
+        # only pins down that it raises, not which of the two messages.
         child = subprocess.Popen(["sleep", "5"])
 
         def kill_soon():
@@ -381,6 +387,48 @@ class SampleProcessTests(unittest.TestCase):
         threading.Thread(target=kill_soon, daemon=True).start()
         with self.assertRaises(RuntimeError):
             sampler.sample_process(child.pid, 3, interval=0.3)
+        child.wait()
+
+    def test_process_exiting_exactly_at_window_end_is_a_complete_measurement(self):
+        # This is the bug the fix exists for: BenchRunner's own
+        # settle+measure window and this sampling window are only
+        # approximately synchronized, so the player often exits at (or
+        # microseconds after) the moment this call collects its last
+        # needed sample. target = round(2/0.5) = 4 samples, due at
+        # roughly t=0, 0.5, 1.0, 1.5; killing at 1.6s lands after the 4th
+        # read and, critically, before any 5th probe would ever be
+        # attempted under the fixed loop (there is no 5th probe at all
+        # once target is reached), so this must succeed even though the
+        # process is dead well before sample_process returns.
+        child = subprocess.Popen(["sleep", "5"])
+
+        def kill_after_full_window():
+            time.sleep(1.6)
+            child.kill()
+
+        import threading
+        threading.Thread(target=kill_after_full_window, daemon=True).start()
+        result = sampler.sample_process(child.pid, 2, interval=0.5)
+        child.wait()
+        self.assertGreaterEqual(result["cpuPercentMean"], 0.0)
+        self.assertGreater(result["rssMbMean"], 0.0)
+
+    def test_process_exiting_just_short_of_full_window_still_raises(self):
+        # One or two samples short of target=round(2/0.5)=4 must still
+        # fail: the fix must not have overcorrected into tolerating an
+        # early exit as long as *some* samples came in. See the note on
+        # test_process_exiting_mid_window_raises_not_partial_success for
+        # why this checks only that it raises, not the exact message.
+        child = subprocess.Popen(["sleep", "5"])
+
+        def kill_one_sample_early():
+            time.sleep(0.9)  # needs samples up to ~1.5s
+            child.kill()
+
+        import threading
+        threading.Thread(target=kill_one_sample_early, daemon=True).start()
+        with self.assertRaises(RuntimeError):
+            sampler.sample_process(child.pid, 2, interval=0.5)
         child.wait()
 
     def test_non_positive_seconds_raises(self):

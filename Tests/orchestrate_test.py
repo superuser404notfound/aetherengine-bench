@@ -164,6 +164,11 @@ class ComputeFrameGateTests(unittest.TestCase):
         self.assertLess(gate["ratio"], orchestrate.DEFAULT_GATE_THRESHOLD)
 
 
+# 500 mW is a plausible reading for a *measured run* under active decode
+# load (EvaluateRunTests below uses these as the run's own power, never as
+# a baseline candidate). Baseline-specific readings live near
+# TakeCleanBaselineTests instead: a baseline is subject to a much lower
+# magnitude ceiling (MAX_BASELINE_CPU_MW=250) that this value would fail.
 HEALTHY_POWER = {"cpuPowerMw": 500.0, "gpuPowerMw": 100.0, "anePowerMw": 0.0,
                   "eClusterResidency": 30.0, "pClusterResidency": 10.0,
                   "thermalPressure": "Nominal", "throttled": False, "samples": 60}
@@ -277,6 +282,49 @@ class BaselineSubtractTests(unittest.TestCase):
         self.assertIsNone(orchestrate._baseline_subtract("anePowerMw", 5.0, None))
 
 
+class NegativePowerReasonTests(unittest.TestCase):
+    def test_clean_subtraction_has_no_reason(self):
+        power = {"cpuPowerMw": 300.0}
+        baseline = {"cpuPowerMw": 150.0}
+        subtracted = {"cpuPowerMw": 150.0}
+        self.assertIsNone(orchestrate.negative_power_reason(power, baseline, subtracted))
+
+    def test_negative_field_names_the_baseline_and_raw_reading(self):
+        # The exact live-observed defect: raw 118.2 mW, baseline 530.5 mW.
+        power = {"cpuPowerMw": 118.2}
+        baseline = {"cpuPowerMw": 530.5}
+        subtracted = {"cpuPowerMw": -412.3}
+        reason = orchestrate.negative_power_reason(power, baseline, subtracted)
+        self.assertIsNotNone(reason)
+        self.assertIn("cpuPowerMw", reason)
+        self.assertIn("118.2", reason)
+        self.assertIn("530.5", reason)
+        self.assertIn("-412.3", reason)
+
+    def test_none_values_are_not_flagged_as_negative(self):
+        power = {"anePowerMw": None}
+        baseline = {"anePowerMw": None}
+        subtracted = {"anePowerMw": None}
+        self.assertIsNone(orchestrate.negative_power_reason(power, baseline, subtracted))
+
+    def test_non_power_fields_are_never_checked(self):
+        # eClusterResidency etc. can be negative-looking in synthetic data
+        # without meaning anything physically impossible; only *Mw fields
+        # are power at all.
+        power = {"eClusterResidency": 10.0}
+        baseline = {"eClusterResidency": 50.0}
+        subtracted = {"eClusterResidency": -40.0}
+        self.assertIsNone(orchestrate.negative_power_reason(power, baseline, subtracted))
+
+    def test_multiple_negative_fields_are_all_named(self):
+        power = {"cpuPowerMw": 100.0, "gpuPowerMw": 50.0}
+        baseline = {"cpuPowerMw": 300.0, "gpuPowerMw": 200.0}
+        subtracted = {"cpuPowerMw": -200.0, "gpuPowerMw": -150.0}
+        reason = orchestrate.negative_power_reason(power, baseline, subtracted)
+        self.assertIn("cpuPowerMw", reason)
+        self.assertIn("gpuPowerMw", reason)
+
+
 class FindPlayerPidTests(unittest.TestCase):
     def test_direct_child_binary(self):
         # sudo -u user AetherBench ...: one hop below the sudo monitor pid.
@@ -331,16 +379,17 @@ class WaitForPlayerPidTests(unittest.TestCase):
 
 
 class FakeProc:
-    def __init__(self, pid, exit_after=None):
+    def __init__(self, pid, exit_after=None, exit_code=1):
         self.pid = pid
         self.returncode = None
         self._exit_after = exit_after
+        self._exit_code = exit_code
         self._polls = 0
 
     def poll(self):
         self._polls += 1
         if self._exit_after is not None and self._polls >= self._exit_after:
-            self.returncode = 1
+            self.returncode = self._exit_code
         return self.returncode
 
     def terminate(self):
@@ -357,46 +406,63 @@ class SpawnAndSettleTests(unittest.TestCase):
     def test_crash_during_settle_is_reported_not_silently_retried(self):
         proc = FakeProc(pid=800, exit_after=1)
         clock = {"t": 0.0}
-        pid, reason = orchestrate.spawn_and_settle(
+        pid, reason, refused = orchestrate.spawn_and_settle(
             proc, "AetherBench", settle_seconds=5,
             table_fn=lambda: [], sleep_fn=lambda s: clock.__setitem__("t", clock["t"] + s),
             now_fn=lambda: clock["t"])
         self.assertIsNone(pid)
         self.assertIn("crashed during settle", reason)
+        self.assertFalse(refused)
+
+    def test_refusal_exit_code_is_reported_and_flagged_distinctly(self):
+        # exit_code proves spawn_and_settle actually branches on the exact
+        # value, not just "any nonzero code is a crash".
+        proc = FakeProc(pid=850, exit_after=1, exit_code=orchestrate.REFUSAL_EXIT_CODE)
+        clock = {"t": 0.0}
+        pid, reason, refused = orchestrate.spawn_and_settle(
+            proc, "AVBench", settle_seconds=5,
+            table_fn=lambda: [], sleep_fn=lambda s: clock.__setitem__("t", clock["t"] + s),
+            now_fn=lambda: clock["t"])
+        self.assertIsNone(pid)
+        self.assertIn("refused this source", reason)
+        self.assertNotIn("crashed", reason)
+        self.assertTrue(refused)
 
     def test_never_forks_a_recognizable_player_is_reported(self):
         proc = FakeProc(pid=900)  # stays "alive" (poll() -> None) forever
         clock = {"t": 0.0}
-        pid, reason = orchestrate.spawn_and_settle(
+        pid, reason, refused = orchestrate.spawn_and_settle(
             proc, "AetherBench", settle_seconds=2, extra_grace=1,
             table_fn=lambda: [(900, 1, "sudo")],  # never gains a child
             sleep_fn=lambda s: clock.__setitem__("t", clock["t"] + s),
             now_fn=lambda: clock["t"])
         self.assertIsNone(pid)
         self.assertIn("never produced a recognizable player process", reason)
+        self.assertFalse(refused)
 
     def test_healthy_launch_resolves_the_player_pid(self):
         proc = FakeProc(pid=1000)
         clock = {"t": 0.0}
         table = [(1000, 1, "sudo"), (1001, 1000, "AetherBench")]
-        pid, reason = orchestrate.spawn_and_settle(
+        pid, reason, refused = orchestrate.spawn_and_settle(
             proc, "AetherBench", settle_seconds=2,
             table_fn=lambda: table,
             sleep_fn=lambda s: clock.__setitem__("t", clock["t"] + s),
             now_fn=lambda: clock["t"])
         self.assertEqual(pid, 1001)
         self.assertIsNone(reason)
+        self.assertFalse(refused)
 
 
 class LaunchWithRetryTests(unittest.TestCase):
     def test_crash_then_success_counts_exactly_one_failure(self):
         fake_proc = FakeProc(pid=1)
-        outcomes = [(None, "crashed during settle (exit 1)"), (42, None)]
+        outcomes = [(None, "crashed during settle (exit 1)", False), (42, None, False)]
         with mock.patch.object(orchestrate, "launch", return_value=fake_proc) as launch_mock, \
              mock.patch.object(orchestrate, "spawn_and_settle", side_effect=outcomes), \
              mock.patch("time.sleep"):
             failures = {"aether": {"h264-1080p.mp4": 0}}
-            proc, pid, attempts, report_path, reason = orchestrate.launch_with_retry(
+            proc, pid, attempts, report_path, reason, refused = orchestrate.launch_with_retry(
                 "aether", "h264-1080p.mp4", "/fake/full/path/h264-1080p.mp4",
                 lambda attempt: f"/tmp/fake-{attempt}.json",
                 orchestrate.ProtocolConfig(max_launch_attempts=5), failures)
@@ -404,6 +470,7 @@ class LaunchWithRetryTests(unittest.TestCase):
         self.assertEqual(failures["aether"]["h264-1080p.mp4"], 1)
         self.assertEqual(pid, 42)
         self.assertIsNotNone(proc)
+        self.assertFalse(refused)
         # Regression guard: launch() must receive the resolved fixture_path
         # (Fixtures/<name>, an absolute path), never the bare fixture name.
         # A bare name resolves against the player's own cwd, not Fixtures/,
@@ -417,10 +484,10 @@ class LaunchWithRetryTests(unittest.TestCase):
         fake_proc = FakeProc(pid=1)
         with mock.patch.object(orchestrate, "launch", return_value=fake_proc), \
              mock.patch.object(orchestrate, "spawn_and_settle",
-                                return_value=(None, "crashed during settle (exit 1)")), \
+                                return_value=(None, "crashed during settle (exit 1)", False)), \
              mock.patch("time.sleep"):
             failures = {"vlckit": {"vp9.webm": 0}}
-            proc, pid, attempts, report_path, reason = orchestrate.launch_with_retry(
+            proc, pid, attempts, report_path, reason, refused = orchestrate.launch_with_retry(
                 "vlckit", "vp9.webm", "/fake/vp9.webm",
                 lambda attempt: f"/tmp/fake-{attempt}.json",
                 orchestrate.ProtocolConfig(max_launch_attempts=3), failures)
@@ -429,6 +496,7 @@ class LaunchWithRetryTests(unittest.TestCase):
         self.assertEqual(attempts, 3)
         self.assertEqual(failures["vlckit"]["vp9.webm"], 3)
         self.assertIn("crashed during settle", reason)
+        self.assertFalse(refused)
 
     def test_failures_are_keyed_per_fixture_not_pooled_session_wide(self):
         # A renderer showing one session-wide count underneath every
@@ -440,7 +508,7 @@ class LaunchWithRetryTests(unittest.TestCase):
         failures = {"ksplayer": {"av1-10bit.mkv": 0, "hevc-4k-hdr10.mp4": 0}}
         with mock.patch.object(orchestrate, "launch", return_value=fake_proc), \
              mock.patch.object(orchestrate, "spawn_and_settle",
-                                return_value=(None, "crashed during settle (exit 1)")), \
+                                return_value=(None, "crashed during settle (exit 1)", False)), \
              mock.patch("time.sleep"):
             orchestrate.launch_with_retry(
                 "ksplayer", "av1-10bit.mkv", "/fake/av1-10bit.mkv",
@@ -448,6 +516,30 @@ class LaunchWithRetryTests(unittest.TestCase):
                 orchestrate.ProtocolConfig(max_launch_attempts=3), failures)
         self.assertEqual(failures["ksplayer"]["av1-10bit.mkv"], 3)
         self.assertEqual(failures["ksplayer"]["hevc-4k-hdr10.mp4"], 0)
+
+    def test_refusal_is_recorded_once_and_never_retried(self):
+        fake_proc = FakeProc(pid=1)
+        with mock.patch.object(orchestrate, "launch", return_value=fake_proc) as launch_mock, \
+             mock.patch.object(orchestrate, "spawn_and_settle",
+                                return_value=(None, "refused this source (exit 3): "
+                                                     "This media format is not supported.", True)), \
+             mock.patch("time.sleep"):
+            failures = {"avplayer": {"av1-10bit.mkv": 0}}
+            proc, pid, attempts, report_path, reason, refused = orchestrate.launch_with_retry(
+                "avplayer", "av1-10bit.mkv", "/fake/av1-10bit.mkv",
+                lambda attempt: f"/tmp/fake-{attempt}.json",
+                orchestrate.ProtocolConfig(max_launch_attempts=5), failures)
+        self.assertIsNone(proc)
+        self.assertIsNone(pid)
+        self.assertEqual(attempts, 1)  # never retried
+        self.assertTrue(refused)
+        self.assertIn("This media format is not supported", reason)
+        # A deterministic refusal is not a launch-reliability failure: it
+        # must not be counted alongside genuine crashes, or an engine that
+        # correctly and honestly declines a format it cannot play would
+        # look less reliable than one that silently mispublishes a result.
+        self.assertEqual(failures["avplayer"]["av1-10bit.mkv"], 0)
+        self.assertEqual(launch_mock.call_count, 1)
 
 
 class MeasureOnceGuardedSamplingTests(unittest.TestCase):
@@ -460,7 +552,7 @@ class MeasureOnceGuardedSamplingTests(unittest.TestCase):
     def test_power_sampling_failure_is_a_discarded_record_not_a_raise(self):
         fake_proc = FakeProc(pid=1)
         with mock.patch.object(orchestrate, "launch_with_retry",
-                                return_value=(fake_proc, 999, 1, "/tmp/fake.json", None)), \
+                                return_value=(fake_proc, 999, 1, "/tmp/fake.json", None, False)), \
              mock.patch.object(orchestrate.sampler, "sample_power", side_effect=RuntimeError("powermetrics hung")), \
              mock.patch.object(orchestrate.sampler, "sample_process", return_value={"cpuPercentMean": 1.0}):
             record = orchestrate.measure_once("aether", "h264-1080p.mp4", 0, {"cpuPowerMw": 100.0},
@@ -469,11 +561,12 @@ class MeasureOnceGuardedSamplingTests(unittest.TestCase):
         self.assertIn("power sampling failed", record["discardReason"])
         self.assertIsNone(record["power"])
         self.assertIsNone(record["report"])
+        self.assertFalse(record["refused"])
 
     def test_power_sampling_failure_still_terminates_the_player(self):
         fake_proc = FakeProc(pid=1)
         with mock.patch.object(orchestrate, "launch_with_retry",
-                                return_value=(fake_proc, 999, 1, "/tmp/fake.json", None)), \
+                                return_value=(fake_proc, 999, 1, "/tmp/fake.json", None, False)), \
              mock.patch.object(orchestrate.sampler, "sample_power", side_effect=RuntimeError("powermetrics hung")), \
              mock.patch.object(orchestrate.sampler, "sample_process", return_value={"cpuPercentMean": 1.0}), \
              mock.patch.object(orchestrate, "_terminate_player") as terminate_mock:
@@ -485,7 +578,7 @@ class MeasureOnceGuardedSamplingTests(unittest.TestCase):
     def test_healthy_path_still_terminates_the_player_with_the_normal_grace_period(self):
         fake_proc = FakeProc(pid=1)
         with mock.patch.object(orchestrate, "launch_with_retry",
-                                return_value=(fake_proc, 999, 1, "/tmp/does-not-exist.json", None)), \
+                                return_value=(fake_proc, 999, 1, "/tmp/does-not-exist.json", None, False)), \
              mock.patch.object(orchestrate.sampler, "sample_power", return_value=dict(HEALTHY_POWER)), \
              mock.patch.object(orchestrate.sampler, "sample_process", return_value={"cpuPercentMean": 1.0}), \
              mock.patch.object(orchestrate, "_terminate_player") as terminate_mock:
@@ -499,7 +592,7 @@ class MeasureOnceGuardedSamplingTests(unittest.TestCase):
     def test_baseline_error_zeroes_subtracted_power_but_keeps_raw(self):
         fake_proc = FakeProc(pid=1)
         with mock.patch.object(orchestrate, "launch_with_retry",
-                                return_value=(fake_proc, 999, 1, "/tmp/does-not-exist.json", None)), \
+                                return_value=(fake_proc, 999, 1, "/tmp/does-not-exist.json", None, False)), \
              mock.patch.object(orchestrate.sampler, "sample_power", return_value=dict(HEALTHY_POWER)), \
              mock.patch.object(orchestrate.sampler, "sample_process", return_value={"cpuPercentMean": 1.0}), \
              mock.patch.object(orchestrate, "_terminate_player"):
@@ -509,6 +602,43 @@ class MeasureOnceGuardedSamplingTests(unittest.TestCase):
         self.assertIsNone(record["power"]["cpuPowerMw"])
         self.assertEqual(record["powerRaw"]["cpuPowerMw"], HEALTHY_POWER["cpuPowerMw"])
         self.assertIn("idle baseline was not clean", record["discardReason"])
+
+    def test_negative_power_after_subtraction_is_discarded_with_baseline_named(self):
+        # The exact defect this exists for: an unclean baseline (530.5 mW)
+        # subtracted from a genuinely lower raw reading (118.2 mW) produces
+        # a physically impossible negative number. take_clean_baseline's
+        # own magnitude/stability checks are meant to catch this upstream,
+        # but this is the last line of defense if a bad baseline still
+        # reaches here (e.g. a smaller max_attempts, a borderline reading).
+        fake_proc = FakeProc(pid=1)
+        low_raw_power = dict(HEALTHY_POWER, cpuPowerMw=118.2)
+        bad_baseline = {"cpuPowerMw": 530.5}
+        with mock.patch.object(orchestrate, "launch_with_retry",
+                                return_value=(fake_proc, 999, 1, "/tmp/does-not-exist.json", None, False)), \
+             mock.patch.object(orchestrate.sampler, "sample_power", return_value=low_raw_power), \
+             mock.patch.object(orchestrate.sampler, "sample_process", return_value={"cpuPercentMean": 1.0}), \
+             mock.patch.object(orchestrate, "_terminate_player"):
+            record = orchestrate.measure_once("aether", "h264-1080p.mp4", 0, bad_baseline,
+                                               orchestrate.ProtocolConfig(), {"aether": 0}, pathlib.Path("/tmp"))
+        self.assertTrue(record["discarded"])
+        self.assertIn("physically impossible negative power", record["discardReason"])
+        self.assertIn("530.5", record["discardReason"])
+        self.assertLess(record["power"]["cpuPowerMw"], 0)  # not hidden, just flagged
+
+    def test_refused_source_is_discarded_once_with_the_engine_named(self):
+        with mock.patch.object(orchestrate, "launch_with_retry",
+                                return_value=(None, None, 1, None,
+                                               "refused this source (exit 3): "
+                                               "This media format is not supported.", True)):
+            record = orchestrate.measure_once("avplayer", "av1-10bit.mkv", 0, {"cpuPowerMw": 100.0},
+                                               orchestrate.ProtocolConfig(), {"avplayer": {}}, pathlib.Path("/tmp"))
+        self.assertTrue(record["discarded"])
+        self.assertTrue(record["refused"])
+        self.assertIn("avplayer", record["discardReason"])
+        self.assertIn("refused this source", record["discardReason"])
+        self.assertIn("This media format is not supported", record["discardReason"])
+        self.assertEqual(record["launchAttempts"], 1)
+        self.assertIsNone(record["process"])
 
 
 class DemoteTests(unittest.TestCase):
@@ -574,39 +704,97 @@ class TerminatePlayerTests(unittest.TestCase):
 
 
 class TakeCleanBaselineTests(unittest.TestCase):
-    def test_clean_on_first_attempt_needs_no_retry(self):
+    """Baseline candidates specifically, distinct from HEALTHY_POWER/
+    THROTTLED_POWER above (which stand in for a measured *run's* power and
+    would fail the magnitude ceiling here). Stability now requires two
+    CONSECUTIVE agreeing readings, so acceptance never happens before the
+    second attempt even when every reading is clean; every test below
+    accounts for that rather than expecting a single good reading to be
+    enough.
+    """
+    # ~150 mW: this machine's own observed genuine-idle floor.
+    CLEAN = {"cpuPowerMw": 150.0, "gpuPowerMw": 5.0, "anePowerMw": 0.0,
+             "eClusterResidency": 15.0, "pClusterResidency": 5.0,
+             "thermalPressure": "Nominal", "throttled": False, "samples": 60}
+    # Close to CLEAN (15 mW apart, under the 50 mW tolerance) but not
+    # bit-identical, so the stability check is exercised as real
+    # arithmetic, not an accidental object-equality match.
+    CLEAN_AGREEING = dict(CLEAN, cpuPowerMw=165.0)
+    # The real, live-observed reading right after a four-target xcodebuild:
+    # Nominal thermal, a full 60 samples, and still 530.5 mW.
+    BUSY_BUILD = dict(CLEAN, cpuPowerMw=530.5, thermalPressure="Nominal", throttled=False)
+
+    def test_two_consecutive_agreeing_readings_are_accepted(self):
+        cooldowns = {"n": 0}
+        readings = [dict(self.CLEAN), dict(self.CLEAN_AGREEING)]
+        baseline, error = orchestrate.take_clean_baseline(
+            orchestrate.ProtocolConfig(), cool_and_retry=lambda: cooldowns.__setitem__("n", cooldowns["n"] + 1),
+            sample_fn=lambda seconds: readings.pop(0))
+        self.assertIsNone(error)
+        self.assertEqual(baseline["cpuPowerMw"], self.CLEAN_AGREEING["cpuPowerMw"])
+        self.assertEqual(cooldowns["n"], 1)  # one cooldown between the two readings
+
+    def test_a_single_clean_reading_is_not_enough_on_its_own(self):
+        # The magnitude ceiling alone would accept this; stability requires
+        # a second, consecutive agreeing reading, so capping attempts at 1
+        # must never accept even a perfectly clean single reading.
+        baseline, error = orchestrate.take_clean_baseline(
+            orchestrate.ProtocolConfig(), cool_and_retry=lambda: None,
+            max_attempts=1, sample_fn=lambda seconds: dict(self.CLEAN))
+        self.assertIsNotNone(error)
+        self.assertIn("not yet stable", error)
+
+    def test_retries_on_throttled_baseline_then_settles(self):
+        attempts = [dict(THROTTLED_POWER), dict(self.CLEAN), dict(self.CLEAN_AGREEING)]
         cooldowns = {"n": 0}
         baseline, error = orchestrate.take_clean_baseline(
             orchestrate.ProtocolConfig(), cool_and_retry=lambda: cooldowns.__setitem__("n", cooldowns["n"] + 1),
-            sample_fn=lambda seconds: dict(HEALTHY_POWER))
+            max_attempts=4, sample_fn=lambda seconds: attempts.pop(0))
         self.assertIsNone(error)
-        self.assertEqual(baseline["thermalPressure"], "Nominal")
-        self.assertEqual(cooldowns["n"], 0)
+        self.assertEqual(cooldowns["n"], 2)
 
-    def test_retries_on_throttled_baseline_then_succeeds(self):
-        attempts = [dict(THROTTLED_POWER), dict(HEALTHY_POWER)]
-        cooldowns = {"n": 0}
-        baseline, error = orchestrate.take_clean_baseline(
-            orchestrate.ProtocolConfig(), cool_and_retry=lambda: cooldowns.__setitem__("n", cooldowns["n"] + 1),
-            max_attempts=3, sample_fn=lambda seconds: attempts.pop(0))
-        self.assertIsNone(error)
-        self.assertEqual(cooldowns["n"], 1)
-
-    def test_retries_on_unreported_thermal_pressure(self):
-        unknown = dict(HEALTHY_POWER, thermalPressure=None, throttled=False)
-        attempts = [unknown, dict(HEALTHY_POWER)]
+    def test_retries_on_unreported_thermal_pressure_then_settles(self):
+        unknown = dict(self.CLEAN, thermalPressure=None, throttled=False)
+        attempts = [unknown, dict(self.CLEAN), dict(self.CLEAN_AGREEING)]
         baseline, error = orchestrate.take_clean_baseline(
             orchestrate.ProtocolConfig(), cool_and_retry=lambda: None,
-            max_attempts=3, sample_fn=lambda seconds: attempts.pop(0))
+            max_attempts=4, sample_fn=lambda seconds: attempts.pop(0))
         self.assertIsNone(error)
 
-    def test_retries_on_too_few_samples(self):
-        thin = dict(HEALTHY_POWER, samples=2)
-        attempts = [thin, dict(HEALTHY_POWER)]
+    def test_retries_on_too_few_samples_then_settles(self):
+        thin = dict(self.CLEAN, samples=2)
+        attempts = [thin, dict(self.CLEAN), dict(self.CLEAN_AGREEING)]
         baseline, error = orchestrate.take_clean_baseline(
             orchestrate.ProtocolConfig(), cool_and_retry=lambda: None,
-            max_attempts=3, sample_fn=lambda seconds: attempts.pop(0))
+            max_attempts=4, sample_fn=lambda seconds: attempts.pop(0))
         self.assertIsNone(error)
+
+    def test_rejects_a_baseline_over_the_magnitude_ceiling_then_settles(self):
+        # The exact defect this exists for: Nominal thermal, a full sample
+        # count, and still not a real idle reading. Thermal/sample checks
+        # alone would have accepted BUSY_BUILD outright.
+        attempts = [dict(self.BUSY_BUILD), dict(self.CLEAN), dict(self.CLEAN_AGREEING)]
+        baseline, error = orchestrate.take_clean_baseline(
+            orchestrate.ProtocolConfig(), cool_and_retry=lambda: None,
+            max_attempts=4, sample_fn=lambda seconds: attempts.pop(0))
+        self.assertIsNone(error)
+        self.assertLess(baseline["cpuPowerMw"], orchestrate.MAX_BASELINE_CPU_MW)
+
+    def test_two_readings_both_under_the_ceiling_but_disagreeing_are_not_accepted(self):
+        # This is specifically what the stability check adds beyond the
+        # magnitude ceiling: a machine cooling from a build can sit under
+        # the ceiling while still trending downward (240 -> 150), and only
+        # requiring two in a row to actually match catches that.
+        declining_then_settled = [
+            dict(self.CLEAN, cpuPowerMw=240.0),   # under the 250 mW ceiling
+            dict(self.CLEAN, cpuPowerMw=150.0),   # also under it, but 90 mW away: not stable yet
+            dict(self.CLEAN, cpuPowerMw=155.0),   # 5 mW from the previous: stable
+        ]
+        baseline, error = orchestrate.take_clean_baseline(
+            orchestrate.ProtocolConfig(), cool_and_retry=lambda: None,
+            max_attempts=5, sample_fn=lambda seconds: declining_then_settled.pop(0))
+        self.assertIsNone(error)
+        self.assertEqual(baseline["cpuPowerMw"], 155.0)
 
     def test_sample_power_raising_is_retried_not_propagated(self):
         # sample_power is documented to raise on a hung/failing
@@ -614,17 +802,18 @@ class TakeCleanBaselineTests(unittest.TestCase):
         # take_clean_baseline any more than measure_once lets it out for a
         # per-run sample.
         calls = {"n": 0}
+        clean_reads = [dict(self.CLEAN), dict(self.CLEAN_AGREEING)]
 
         def flaky(seconds):
             calls["n"] += 1
             if calls["n"] == 1:
                 raise RuntimeError("sudo powermetrics timed out")
-            return dict(HEALTHY_POWER)
+            return clean_reads.pop(0)
 
         baseline, error = orchestrate.take_clean_baseline(
-            orchestrate.ProtocolConfig(), cool_and_retry=lambda: None, max_attempts=3, sample_fn=flaky)
+            orchestrate.ProtocolConfig(), cool_and_retry=lambda: None, max_attempts=4, sample_fn=flaky)
         self.assertIsNone(error)
-        self.assertEqual(calls["n"], 2)
+        self.assertEqual(calls["n"], 3)
 
     def test_exhausting_attempts_returns_last_baseline_and_error_not_raise(self):
         cooldowns = {"n": 0}

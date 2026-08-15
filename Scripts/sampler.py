@@ -281,11 +281,25 @@ def sample_process(pid, seconds, interval=1.0):
     a window of `seconds`, and aggregate.
 
     A pid that never produces a reading, or one that stops responding
-    partway through the window (the player crashed, or orchestrate.py's
-    `sudo -u` player process died mid-measurement), raises rather than
-    returning an aggregate built from a shorter window than the caller
-    asked for. A short, silently-truncated window would understate the
-    real cost and look exactly like a clean full-window measurement.
+    before this call has collected the full complement of samples the
+    window calls for (the player crashed, or orchestrate.py's `sudo -u`
+    player process died mid-measurement), raises rather than returning an
+    aggregate built from a shorter window than the caller asked for. A
+    short, silently-truncated window would understate the real cost and
+    look exactly like a clean full-window measurement.
+
+    A process disappearing once this call already HAS that full
+    complement is not a failure, though: BenchRunner's own settle+measure
+    window and this window are only approximately synchronized (this one
+    starts from when the caller decided settle had elapsed, that one from
+    when the player itself finished loading and started playing, see
+    spawn_and_settle's docstring for the exact skew), so the two clocks
+    close within roughly a sample interval of each other by design, and
+    the sampler racing the player's own ordinary exit at that boundary is
+    expected, not a fault in either side. The nominal target sample count,
+    `round(seconds / interval)`, is exactly the number the caller asked
+    for; once collected, no further read is attempted at all, so there is
+    nothing left to race.
     """
     if seconds <= 0:
         raise ValueError(f"sample_process: seconds must be positive, got {seconds}")
@@ -304,21 +318,26 @@ def sample_process(pid, seconds, interval=1.0):
     if pid <= 0:
         raise ValueError(f"sample_process: pid must be positive, got {pid}")
 
+    # Nearest whole sample count, never zero: e.g. seconds=20, interval=1.0
+    # wants exactly 20 samples, not the 21 the old deadline-checked-after-
+    # the-read loop kept trying for (a 21st probe at t=20 that raced the
+    # player's own exit and lost, discarding a run that already had every
+    # sample it needed).
+    target = max(1, int(seconds / interval + 0.5))
+
     samples = []
-    deadline = time.time() + seconds
-    while True:
+    while len(samples) < target:
         reading = _read_ps(pid)
         if reading is None:
             reason = _diagnose_pid_absence(pid)
             if samples:
                 raise RuntimeError(
                     f"sample_process: pid {pid} stopped responding after "
-                    f"{len(samples)} sample(s), before the {seconds}s window "
-                    f"elapsed ({reason})"
+                    f"{len(samples)} of {target} sample(s) needed, before the "
+                    f"{seconds}s window elapsed ({reason})"
                 )
             raise RuntimeError(f"sample_process: pid {pid} produced no reading ({reason})")
         samples.append(reading)
-        if time.time() >= deadline:
-            break
-        time.sleep(interval)
+        if len(samples) < target:
+            time.sleep(interval)
     return aggregate_process(samples)

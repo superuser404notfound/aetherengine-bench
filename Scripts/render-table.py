@@ -328,9 +328,11 @@ def render(results, fixture="hevc-4k-hdr10.mp4"):
     if launch_failures:
         fails = ", ".join(f"{name} {n}" for name, n in launch_failures)
         lines += [
-            f"Launch failures on {fixture} (the process crashed or refused to become ready on "
-            "a launch attempt; every failed attempt is counted, whether or not a later attempt "
-            f"in the same cell went on to succeed): {fails}.",
+            f"Launch failures on {fixture} (the process crashed or never became ready on a "
+            "launch attempt; every failed attempt is counted, whether or not a later attempt "
+            "in the same cell went on to succeed. A deterministic refusal, an engine correctly "
+            "declining a source it was never going to support, is not counted here: it shows "
+            f"once, in the cell's own n/a reason, on the first attempt): {fails}.",
             "",
         ]
 

@@ -113,9 +113,17 @@ final class KSPlayerBackend: BenchBackend {
         // the README's "AV1 hardware decoding: GPL no / LGPL yes" row.
         // There is no other public accessor for coded dimensions on
         // MediaPlayerTrack, so refusing the session here is the honest
-        // outcome, not a bug to route around.
+        // outcome, not a bug to route around. By this point a candidate has
+        // already fired readyToPlay with an enabled video track and a real
+        // nominal rate, so a nil format description is specifically this
+        // known capability gap, not the generic "nothing usable at all"
+        // .noVideoTrack throws above cover; see BackendError.unsupportedFormat
+        // for why the distinction matters downstream (a deterministic
+        // refusal must not be recorded, retried, or published as a crash).
         guard let formatDescription = videoTrack.formatDescription else {
-            throw BackendError.noOutputDescription
+            throw BackendError.unsupportedFormat(
+                "no decodable format description for an otherwise ready \(String(describing: servedType)) "
+                + "video track (known signature of a codec unsupported in this build, e.g. AV1 in the free GPL tier)")
         }
         let dimensions = CMVideoFormatDescriptionGetDimensions(formatDescription)
         guard dimensions.width > 0, dimensions.height > 0 else {

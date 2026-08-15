@@ -88,7 +88,36 @@ BASELINE_SECONDS = 60
 # its nominal sample count is evidence powermetrics was interrupted or
 # degraded partway through, not a real 60s-worth-of-idle reading.
 MIN_BASELINE_SAMPLES = BASELINE_SECONDS // 2
-DEFAULT_BASELINE_MAX_ATTEMPTS = 3
+DEFAULT_BASELINE_MAX_ATTEMPTS = 5
+
+# This machine measures roughly 150 mW CPU at genuine rest; a reading right
+# after a four-target xcodebuild still settling has been observed at 530 mW.
+# 250 mW leaves about 100 mW of margin above the real floor for ordinary
+# background activity (Spotlight, backup daemons, ...) while sitting well
+# below a machine that is still visibly working. Thermal state and sample
+# count alone do not catch this: a still-settling machine reports Nominal
+# and a full complement of samples the whole time, magnitude is the only
+# signal that actually distinguishes "idle" from "just finished building."
+MAX_BASELINE_CPU_MW = 250.0
+# Two consecutive readings must agree within this many mW before a baseline
+# is accepted, on top of the magnitude ceiling above: a machine cooling
+# from a build can sit under the ceiling while still trending downward
+# (e.g. 240 -> 190 -> 155), and the ceiling alone would accept the first
+# reading that happens to duck under it rather than waiting for the
+# machine to actually finish settling. 50 mW is generous enough to accept
+# this machine's own observed idle-to-idle swing (seen up to ~85 mW
+# across unrelated 60s baseline samples) without accepting two points of
+# a still-declining trend as if they were a plateau.
+BASELINE_STABILITY_TOLERANCE_MW = 50.0
+
+# Mirrors Swift's BenchExitCode.refused (Sources/Shared/BenchRunner.swift):
+# a BackendError.unsupportedFormat throw, a deterministic "this engine does
+# not support this source" refusal (AVPlayer has no AV1 decoder at all,
+# KSPlayer's free GPL build gates AV1 behind a paid tier), not a crash.
+# Recorded once, with its reason, and never retried: retrying would waste
+# max_launch_attempts on an outcome that will never change, and publishing
+# it as a crash would be a false statement about the engine.
+REFUSAL_EXIT_CODE = 3
 
 
 @dataclasses.dataclass(frozen=True)
@@ -273,31 +302,73 @@ def wait_for_player_pid(root_pid, comm_name, deadline, poll_interval=0.2,
         sleep_fn(poll_interval)
 
 
-def spawn_and_settle(proc, comm_name, settle_seconds, extra_grace=3.0, poll_interval=0.2,
+def _read_stderr_tail(stderr_path, max_bytes=4000):
+    """Best-effort last line of a launch attempt's captured stderr, or "" on
+    any problem reading it (never raises: this is a diagnostic nicety, not
+    load-bearing for the refused/crashed distinction, which is decided by
+    exit code alone). BenchRunner writes exactly one line ("bench refused:
+    ..." or "bench failed: ...") for its own errors; a genuine crash (e.g.
+    VLCKit's assert aborting the process before Swift's own catch block
+    ever runs) can leave unrelated engine debug output instead, in which
+    case this is only ever a bonus, not the mechanism that tells refused
+    apart from crashed.
+    """
+    if not stderr_path:
+        return ""
+    try:
+        with open(stderr_path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            f.seek(max(0, size - max_bytes))
+            data = f.read()
+        lines = [line for line in data.decode("utf-8", errors="replace").splitlines() if line.strip()]
+        return lines[-1].strip() if lines else ""
+    except Exception:
+        return ""
+
+
+def _exit_failure_reason(returncode, stderr_path):
+    """The crash phrasing ("crashed during settle (exit N)") is unchanged
+    from before this existed, other callers/tests match on that exact
+    substring. Refusals get their own distinct phrasing so a reader (and
+    launch_with_retry, see below) never has to infer which happened from
+    the exit code alone."""
+    tail = _read_stderr_tail(stderr_path)
+    if returncode == REFUSAL_EXIT_CODE:
+        base = f"refused this source (exit {returncode})"
+    else:
+        base = f"crashed during settle (exit {returncode})"
+    return f"{base}: {tail}" if tail else base
+
+
+def spawn_and_settle(proc, comm_name, settle_seconds, stderr_path=None, extra_grace=3.0, poll_interval=0.2,
                       sleep_fn=time.sleep, now_fn=time.time, table_fn=_process_table):
     """proc is an already-started Popen for `sudo -u user <player> ...`.
-    Waits out the settle window, watching for two distinct failure modes: the
-    sudo wrapper exiting early (a crash during startup, e.g. VLCKit's known
-    GL assert) and the wrapper staying alive but never forking a recognizable
-    player process (a hang before the window even opens). Returns
-    (player_pid, failure_reason); exactly one of the two is not None.
+    Waits out the settle window, watching for three distinct outcomes: the
+    sudo wrapper exiting early with REFUSAL_EXIT_CODE (a deterministic,
+    honest "this engine cannot play this source", not a fault), exiting
+    early with any other code (a crash during startup, e.g. VLCKit's known
+    GL assert), or staying alive but never forking a recognizable player
+    process (a hang before the window even opens). Returns
+    (player_pid, failure_reason, refused); refused is only ever True
+    alongside a non-None failure_reason and a None player_pid.
     """
     deadline = now_fn() + settle_seconds
     player_pid = None
     while now_fn() < deadline:
         if proc.poll() is not None:
-            return None, f"crashed during settle (exit {proc.returncode})"
+            return None, _exit_failure_reason(proc.returncode, stderr_path), proc.returncode == REFUSAL_EXIT_CODE
         if player_pid is None:
             player_pid = find_player_pid(proc.pid, comm_name, table_fn)
         sleep_fn(poll_interval)
     if proc.poll() is not None:
-        return None, f"crashed during settle (exit {proc.returncode})"
+        return None, _exit_failure_reason(proc.returncode, stderr_path), proc.returncode == REFUSAL_EXIT_CODE
     if player_pid is None:
         player_pid = wait_for_player_pid(proc.pid, comm_name, now_fn() + extra_grace,
                                           poll_interval, table_fn, sleep_fn, now_fn)
     if player_pid is None:
-        return None, f"never produced a recognizable player process ({comm_name})"
-    return player_pid, None
+        return None, f"never produced a recognizable player process ({comm_name})", False
+    return player_pid, None, False
 
 
 def _baseline_subtract(key, value, baseline_value):
@@ -355,57 +426,108 @@ def take_clean_baseline(cfg, cool_and_retry, max_attempts=DEFAULT_BASELINE_MAX_A
     """Takes and validates an idle-power baseline before it gets subtracted
     into every record of a fixture's block (up to REPEATS * len(backends)
     of them). A baseline recorded on a machine that had not finished
-    cooling from the previous fixture's block (throttled, or with
+    cooling from the previous fixture's block silently corrupts all of
+    them without a single one tripping discarded on its own; a fanless
+    MacBook Air after a 4K run, or right after this project's own
+    four-target xcodebuild, makes this a realistic scenario, not a corner
+    case (measured live: 530.5 mW right after a build, against a genuine
+    idle floor around 150 mW on the same machine).
+
+    Thermal state and sample count are checked first (throttled, or with
     unreported thermal pressure, the same ambiguity evaluate_run guards
-    against for measured runs) silently corrupts all of them without a
-    single one tripping discarded on its own; a fanless MacBook Air after a
-    4K run makes this a realistic scenario, not a corner case. A raise from
-    sample_fn itself (a hung or failing powermetrics) is caught here too,
-    per the same rule as measure_once: a sampler failure becomes a
-    documented, retried condition, never a session-ending exception.
+    against for measured runs), but neither catches a machine that is
+    thermally Nominal yet still measurably busy: a still-settling machine
+    reports Nominal and a full complement of samples the whole time.
+    Magnitude is the only signal that actually distinguishes "idle" from
+    "just finished building", so two further checks specifically target
+    it:
+      - MAX_BASELINE_CPU_MW: a ceiling between the genuine idle floor and
+        what this machine measures while still settling.
+      - BASELINE_STABILITY_TOLERANCE_MW: two CONSECUTIVE readings, both
+        already under the ceiling, must agree within this tolerance. The
+        ceiling alone would accept the first reading that happens to duck
+        under it while the machine is still trending downward (e.g.
+        240 -> 190 -> 155 mW); requiring back-to-back agreement is what
+        actually confirms it has settled rather than just gotten lucky
+        once. Any unclean or unstable reading resets this chain: a good
+        reading, a bad one, then another good one does not count as two
+        in a row.
+    A raise from sample_fn itself (a hung or failing powermetrics) is
+    caught here too, per the same rule as measure_once: a sampler failure
+    becomes a documented, retried condition, never a session-ending
+    exception.
 
     Retries up to max_attempts times, calling cool_and_retry() between
     attempts to cool down further.
 
-    Returns (baseline, error). error is None when baseline is clean and
-    ready to subtract. When every attempt fails to produce a clean reading,
-    baseline is the last one actually obtained (or {} if sample_fn never
-    returned one at all) and error names why: callers must not subtract
-    this baseline, only record what happened.
+    Returns (baseline, error). error is None when baseline is clean,
+    stable, and ready to subtract. When every attempt fails to produce
+    one, baseline is the last reading actually obtained (or {} if
+    sample_fn never returned one at all) and error names why: callers
+    must not subtract this baseline, only record what happened.
     """
     sample_fn = sample_fn or sampler.sample_power
     baseline = {}
     error = None
+    previous_cpu_mw = None  # last reading that passed every check except stability
     for attempt in range(1, max_attempts + 1):
         try:
             baseline = sample_fn(seconds)
         except Exception as exc:
             error = f"sample_power raised: {exc}"
             baseline = {}
+            previous_cpu_mw = None
         else:
+            cpu_mw = baseline.get("cpuPowerMw")
             if baseline["throttled"]:
                 error = f"machine reported throttling (level={baseline['thermalPressure']}) while idle"
+                previous_cpu_mw = None
             elif baseline["thermalPressure"] is None:
                 error = "thermal pressure was never reported during the idle baseline window"
+                previous_cpu_mw = None
             elif baseline.get("samples", 0) < MIN_BASELINE_SAMPLES:
                 error = (f"idle baseline carried only {baseline.get('samples')} sample(s), "
                          f"expected at least {MIN_BASELINE_SAMPLES}")
-            else:
+                previous_cpu_mw = None
+            elif cpu_mw is None or cpu_mw > MAX_BASELINE_CPU_MW:
+                error = (f"idle baseline cpuPowerMw={cpu_mw} exceeds the {MAX_BASELINE_CPU_MW:.0f} mW "
+                         "quiet-machine ceiling (machine still busy, e.g. settling from a build?)")
+                previous_cpu_mw = None
+            elif previous_cpu_mw is not None and abs(cpu_mw - previous_cpu_mw) <= BASELINE_STABILITY_TOLERANCE_MW:
                 return baseline, None
+            else:
+                if previous_cpu_mw is None:
+                    delta_text = "first reading under the ceiling, need a consecutive match"
+                else:
+                    delta_text = f"{abs(cpu_mw - previous_cpu_mw):.1f} mW from the previous reading"
+                error = (f"idle baseline cpuPowerMw={cpu_mw:.1f} not yet stable ({delta_text}, "
+                         f"tolerance {BASELINE_STABILITY_TOLERANCE_MW:.0f} mW)")
+                previous_cpu_mw = cpu_mw
         print(f"    idle baseline attempt {attempt}/{max_attempts} not clean ({error})")
         if attempt < max_attempts:
             cool_and_retry()
     return baseline, error
 
 
-def launch(backend, fixture_path, report_path, cfg):
-    if backend == "mpv":
-        return subprocess.Popen(demote() + [str(ROOT / "Scripts/run-mpv.sh"), fixture_path,
-                                             str(cfg.settle), str(cfg.measure), report_path])
-    return subprocess.Popen(demote() + [str(BINARIES[backend]), "--backend", backend, "--url", fixture_path,
-                                         "--settle", str(cfg.settle), "--measure", str(cfg.measure),
-                                         "--window", "1920x1080", "--display", "0",
-                                         "--report", report_path])
+def launch(backend, fixture_path, report_path, cfg, stderr_path):
+    """stderr_path captures the player's stderr (BenchRunner's own "bench
+    refused: .../bench failed: ..." line, for the four Swift binaries) so
+    _exit_failure_reason can read it back once the process has exited,
+    instead of it only ever scrolling past live in the console. The file
+    handle is opened for the duration of the Popen call only: the child
+    inherits a dup of the fd at exec time, so closing this process's own
+    copy right after does not affect it.
+    """
+    with open(stderr_path, "w") as stderr_file:
+        if backend == "mpv":
+            return subprocess.Popen(demote() + [str(ROOT / "Scripts/run-mpv.sh"), fixture_path,
+                                                 str(cfg.settle), str(cfg.measure), report_path],
+                                     stderr=stderr_file)
+        return subprocess.Popen(demote() + [str(BINARIES[backend]), "--backend", backend, "--url", fixture_path,
+                                             "--settle", str(cfg.settle), "--measure", str(cfg.measure),
+                                             "--window", "1920x1080", "--display", "0",
+                                             "--report", report_path],
+                                 stderr=stderr_file)
 
 
 def launch_with_retry(backend, fixture, fixture_path, report_path_for_attempt, cfg, launch_failures):
@@ -416,6 +538,16 @@ def launch_with_retry(backend, fixture, fixture_path, report_path_for_attempt, c
     engine with a flaky launcher, and this repo's whole point is to publish
     the real number.
 
+    A REFUSAL_EXIT_CODE exit is different in kind, not degree, and is
+    handled entirely separately: it is a deterministic "this engine does
+    not support this source" (AVPlayer has no AV1 decoder, KSPlayer's free
+    build gates AV1 behind a paid tier), so retrying would waste every
+    remaining attempt on an outcome that was never going to change, and it
+    is not counted in launch_failures at all, which exists to measure
+    launch *reliability*: mixing in every fixture an engine correctly and
+    honestly declines would understate how reliable its launcher actually
+    is. Returns immediately on the first refusal, attempts stays at 1.
+
     Keyed by (backend, fixture), not just backend: a renderer that shows a
     session-wide count underneath one fixture's table would re-bill every
     fixture an engine did not fail on with failures that actually all
@@ -423,9 +555,11 @@ def launch_with_retry(backend, fixture, fixture_path, report_path_for_attempt, c
     apparent failure rate for every fixture except the one that earned it.
 
     report_path_for_attempt(attempt) returns a fresh path per attempt, and
-    any stale file at that path is removed before spawning: a crashed
-    attempt's partial (or leftover, from a previous session) report must
-    never be read as this attempt's result.
+    any stale file at that path (report and captured stderr alike) is
+    removed before spawning: a crashed attempt's partial (or leftover, from
+    a previous session) report must never be read as this attempt's result.
+
+    Returns (proc, player_pid, attempts, report_path, reason, refused).
     """
     comm_name = PLAYER_COMM[backend]
     attempts = 0
@@ -433,12 +567,17 @@ def launch_with_retry(backend, fixture, fixture_path, report_path_for_attempt, c
     while attempts < cfg.max_launch_attempts:
         attempts += 1
         report_path = report_path_for_attempt(attempts)
-        if os.path.exists(report_path):
-            os.remove(report_path)
-        proc = launch(backend, fixture_path, report_path, cfg)
-        player_pid, reason = spawn_and_settle(proc, comm_name, cfg.settle)
+        stderr_path = report_path + ".stderr.log"
+        for stale in (report_path, stderr_path):
+            if os.path.exists(stale):
+                os.remove(stale)
+        proc = launch(backend, fixture_path, report_path, cfg, stderr_path)
+        player_pid, reason, refused = spawn_and_settle(proc, comm_name, cfg.settle, stderr_path=stderr_path)
         if player_pid is not None:
-            return proc, player_pid, attempts, report_path, None
+            return proc, player_pid, attempts, report_path, None, False
+        if refused:
+            print(f"    {backend}: refused this source, not retrying ({reason})")
+            return None, None, attempts, None, reason, True
         per_backend = launch_failures.setdefault(backend, {})
         per_backend[fixture] = per_backend.get(fixture, 0) + 1
         if proc.poll() is None:
@@ -450,10 +589,33 @@ def launch_with_retry(backend, fixture, fixture_path, report_path_for_attempt, c
         print(f"    {backend}: launch attempt {attempts}/{cfg.max_launch_attempts} failed ({reason})")
         if attempts < cfg.max_launch_attempts:
             time.sleep(1)
-    return None, None, attempts, None, reason
+    return None, None, attempts, None, reason, False
 
 
-def evaluate_run(power, report, load_error, process_error, backend, fixture, cfg, baseline_error=None):
+def negative_power_reason(power, baseline, subtracted_power):
+    """None if every *Mw field subtracted to a physically sane (non-negative)
+    value or stayed None; otherwise a reason string naming the offending
+    field(s) together with the raw reading and the baseline that produced
+    an impossible negative wattage.
+
+    take_clean_baseline's magnitude and stability checks exist to keep a
+    baseline like this from ever being accepted in the first place, but
+    this is the last line of defense for whatever slips past them (a
+    smaller max_attempts, a genuinely borderline reading): negative power
+    consumption cannot happen, and a subtraction that produces one means
+    the baseline itself was wrong, not that the engine generated power.
+    """
+    offenders = [
+        f"{k} = raw {power.get(k)} - baseline {baseline.get(k)} = {v:.1f} mW"
+        for k, v in subtracted_power.items() if k.endswith("Mw") and v is not None and v < 0
+    ]
+    if not offenders:
+        return None
+    return "physically impossible negative power after baseline subtraction (" + "; ".join(offenders) + ")"
+
+
+def evaluate_run(power, report, load_error, process_error, backend, fixture, cfg,
+                  baseline_error=None, negative_power=None):
     """Every discard reason that applies to one measured window, combined
     rather than the last one overwriting the rest: a run that was both
     thermally throttled AND failed the frame gate must say so, not report
@@ -461,8 +623,15 @@ def evaluate_run(power, report, load_error, process_error, backend, fixture, cfg
     where reasons is a (possibly empty) list of strings and frame_gate is
     the compute_frame_gate() dict, or None if there was no valid report to
     gate on.
+
+    negative_power is negative_power_reason()'s own return value (a string
+    naming the offending field(s), or None): passed in rather than
+    recomputed here so this stays a pure combiner of reasons already
+    decided elsewhere, matching baseline_error's own contract.
     """
     reasons = []
+    if negative_power:
+        reasons.append(negative_power)
     if baseline_error:
         # take_clean_baseline already refused to hand back an unclean
         # baseline for subtraction (measure_once zeroes the subtracted
@@ -509,15 +678,21 @@ def measure_once(backend, fixture, repeat, baseline, cfg, launch_failures, repor
     def report_path_for_attempt(attempt):
         return str(report_dir / f"bench-{backend}-{pathlib.Path(fixture).stem}-{repeat}-{attempt}-{stamp}.json")
 
-    proc, player_pid, attempts, report_path, launch_reason = launch_with_retry(
+    proc, player_pid, attempts, report_path, launch_reason, refused = launch_with_retry(
         backend, fixture, fixture_path, report_path_for_attempt, cfg, launch_failures)
 
     record = {"backend": backend, "fixture": fixture, "repeat": repeat,
-              "baseline": baseline, "launchAttempts": attempts}
+              "baseline": baseline, "launchAttempts": attempts, "refused": refused}
     if proc is None:
+        if refused:
+            # launch_reason already reads "refused this source (exit N): <why>"
+            # (see _exit_failure_reason); naming the engine here is enough,
+            # repeating "does not support this source" would be redundant.
+            discard_reason = f"{backend}: {launch_reason}"
+        else:
+            discard_reason = f"launch failed after {attempts} attempt(s): {launch_reason}"
         record.update(power=None, powerRaw=None, process=None, report=None, frameGate=None,
-                       droppedFramesReported=None, discarded=True,
-                       discardReason=f"launch failed after {attempts} attempt(s): {launch_reason}")
+                       droppedFramesReported=None, discarded=True, discardReason=discard_reason)
         return record
 
     results = {}
@@ -559,14 +734,16 @@ def measure_once(backend, fixture, repeat, baseline, cfg, launch_failures, repor
                        discardReason=f"power sampling failed: {power_error}")
         return record
 
-    report, load_error = load_report(report_path)
-    reasons, frame_gate = evaluate_run(power, report, load_error, results.get("processError"),
-                                        backend, fixture, cfg, baseline_error)
-
     if baseline_error:
         subtracted_power = {k: None for k in power}
+        negative_reason = None
     else:
         subtracted_power = {k: _baseline_subtract(k, power[k], baseline.get(k)) for k in power}
+        negative_reason = negative_power_reason(power, baseline, subtracted_power)
+
+    report, load_error = load_report(report_path)
+    reasons, frame_gate = evaluate_run(power, report, load_error, results.get("processError"),
+                                        backend, fixture, cfg, baseline_error, negative_reason)
 
     record.update({
         "power": subtracted_power,
