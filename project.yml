@@ -32,6 +32,16 @@ targets:
     settings:
       base:
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: BACKEND_AETHER
+        # AetherEngine pulls in FFmpegBuild's Libav*/Libdav1d/Libswscale/Libzimg
+        # etc. frameworks, which SwiftPM stages into this tool's own directory
+        # (BUILT_PRODUCTS_DIR/Frameworks), one level below BUILT_PRODUCTS_DIR
+        # itself. The default "tool" rpath (@executable_path/../Frameworks)
+        # assumes an app-bundle nesting this target does not have, so it looks
+        # one level too high and the built binary dyld-fails outside Xcode's
+        # own test harness, exactly the VLCBench target's problem (see its own
+        # LD_RUNPATH_SEARCH_PATHS comment) for a different vendored framework
+        # set.
+        LD_RUNPATH_SEARCH_PATHS: ["$(inherited)", "@executable_path/Frameworks"]
     dependencies:
       - package: AetherEngine
   AetherBenchTests:
