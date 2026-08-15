@@ -18,10 +18,14 @@ pretty:
   playback paths actually served a fixture (only KSPlayer sets it today,
   and which path wins is genuinely fixture-dependent on this machine, see
   Sources/Backends/KSPlayerBackend.swift). Read per cell, never assumed.
+  Resolution, bit depth and colour transfer get the same treatment: read
+  across every repeat, not just the first, and disclosed if they disagree.
 - Launch failures and thermal state are part of the result: a partially
   discarded cell says so next to its numbers, a fully discarded cell says
-  so instead of a number, and a session's launch-failure counts are
-  printed rather than folded silently into a clean-looking median.
+  so instead of a number, and launch-failure counts are printed scoped to
+  the fixture being rendered (orchestrate.py counts them per (backend,
+  fixture)), never as one session-wide total sitting under every fixture's
+  table, which would re-bill every fixture an engine did not fail on.
 """
 import json
 import statistics
@@ -123,13 +127,18 @@ def _finalize_cell(cell):
 
     cell["servingPaths"] = _unique((r.get("report") or {}).get("servingPath") for r in valid)
 
-    first_output = (valid[0].get("report") or {}).get("output") or {}
-    cell["width"] = first_output.get("width")
-    cell["height"] = first_output.get("height")
-    bit_depth = first_output.get("bitDepth")
-    cell["bitDepth"] = bit_depth if bit_depth else None
-    transfer = first_output.get("colorTransfer")
-    cell["colorTransfer"] = None if _is_unreported_transfer(transfer) else transfer
+    # Resolution, bit depth and colour transfer are properties of the file
+    # and the engine, not of one particular repeat, so every valid run's
+    # output is read, not just the first: if three repeats disagree, that
+    # is a finding worth surfacing (a real non-determinism, or a
+    # misconfigured repeat), the same treatment servingPath already gets
+    # above, not something to silently take one sample of.
+    outputs = [(r.get("report") or {}).get("output") or {} for r in valid]
+    cell["resolutions"] = _unique(
+        f"{o['width']}x{o['height']}" for o in outputs if o.get("width") and o.get("height"))
+    cell["bitDepths"] = _unique(o.get("bitDepth") for o in outputs if o.get("bitDepth"))
+    cell["colorTransfers"] = _unique(
+        o.get("colorTransfer") for o in outputs if not _is_unreported_transfer(o.get("colorTransfer")))
 
 
 def _infer_repeats(table, fixture):
@@ -150,6 +159,39 @@ def _fmt_mb(value):
     return "not reported" if value is None else f"{value} MB"
 
 
+def _short_version(value):
+    """mpv --version's first line is 'mpv vX.Y.Z Copyright (C) ...'; the
+    copyright banner is not part of the version and has no place in a
+    version column. Cuts at the first "Copyright" (case-insensitive) if
+    present, leaves anything else untouched rather than guessing at a
+    format it doesn't recognize."""
+    if not value:
+        return value
+    idx = value.lower().find(" copyright")
+    return value[:idx].strip() if idx != -1 else value
+
+
+def _fixture_launch_failures(raw_launch_failures, fixture):
+    """[(display name, count)] for backends with a nonzero launch-failure
+    count on this specific fixture, in table (README) order. raw_launch_failures
+    is results["launchFailures"], keyed backend -> fixture -> count by
+    orchestrate.py; scoping here (not a session-wide sum) is what stops one
+    engine's failures on a fixture it cannot play at all from being re-billed
+    under every other fixture's clean table.
+    """
+    counts = [(name, (raw_launch_failures.get(b) or {}).get(fixture, 0))
+              for b, name in NAMES.items()]
+    return [(name, n) for name, n in counts if n]
+
+
+def _one_or_varies(values, empty_text, varies_label):
+    if not values:
+        return empty_text
+    if len(values) == 1:
+        return str(values[0])
+    return f"{varies_label} across repeats ({', '.join(str(v) for v in values)}, see raw results)"
+
+
 def _format_detail(name, cell):
     if cell["deliveredFrames"] is not None and cell["expectedFrames"] is not None:
         frames = f"{cell['deliveredFrames']}/{cell['expectedFrames']} delivered/expected"
@@ -161,18 +203,19 @@ def _format_detail(name, cell):
     else:
         dropped = "dropped frames not reported by this engine"
 
-    res = f"{cell['width']}x{cell['height']}" if cell.get("width") and cell.get("height") \
-        else "resolution not reported"
+    res = _one_or_varies(cell.get("resolutions") or [], "resolution not reported", "resolution varies")
 
-    bit_depth, transfer = cell.get("bitDepth"), cell.get("colorTransfer")
-    if bit_depth is None and transfer is None:
+    bit_depths = cell.get("bitDepths") or []
+    transfers = cell.get("colorTransfers") or []
+    if not bit_depths and not transfers:
         output_desc = "bit depth and color transfer not reported by this engine"
-    elif bit_depth is None:
-        output_desc = f"bit depth not reported by this engine, transfer {transfer}"
-    elif transfer is None:
-        output_desc = f"{bit_depth}-bit, color transfer not reported by this engine"
     else:
-        output_desc = f"{bit_depth}-bit, {transfer}"
+        bit_text = (f"{bit_depths[0]}-bit" if len(bit_depths) == 1
+                    else _one_or_varies(bit_depths, "bit depth not reported by this engine",
+                                         "bit depth varies"))
+        transfer_text = _one_or_varies(transfers, "color transfer not reported by this engine",
+                                       "color transfer varies")
+        output_desc = f"{bit_text}, {transfer_text}"
 
     line = f"- **{name}**: {frames}, {dropped}, {res}, {output_desc}."
     paths = cell.get("servingPaths") or []
@@ -203,7 +246,7 @@ def render(results, fixture="hevc-4k-hdr10.mp4"):
         lines += [f"**DRY RUN: {note}.**", ""]
 
     lines += [
-        f"Measured on {machine} (MacBook Air, fanless), macOS {os_version}, "
+        f"Measured on {machine}, macOS {os_version}, "
         f"{fixture}, windowed 1920x1080, {measure_s:.0f} s, median of {repeats}.",
         "",
         "| | CPU power | GPU power | CPU load | on E-cores | RSS | peak RSS |",
@@ -240,34 +283,35 @@ def render(results, fixture="hevc-4k-hdr10.mp4"):
         lines.extend(footnotes)
         lines.append("")
 
+    # Placed directly under the table it concerns, not down by the
+    # versions/method notes, and scoped to this fixture only (see
+    # _fixture_launch_failures's own docstring for why a session-wide sum
+    # would misattribute failures to fixtures that never had any).
+    launch_failures = _fixture_launch_failures(results.get("launchFailures") or {}, fixture)
+    if launch_failures:
+        fails = ", ".join(f"{name} {n}" for name, n in launch_failures)
+        lines += [
+            f"Launch failures on {fixture} (the process crashed or refused to become ready on "
+            "a launch attempt; every failed attempt is counted, whether or not a later attempt "
+            f"in the same cell went on to succeed): {fails}.",
+            "",
+        ]
+
     if detail_lines:
         lines.append(
             "Frame delivery and output (median delivered/expected frames, dropped frames; "
             "resolution, bit depth and HDR transfer are informational per engine and are never "
-            "comparable across engines):")
+            "comparable across engines; a value that disagreed across repeats is shown as "
+            "'varies across repeats' rather than one repeat picked silently):")
         lines.extend(detail_lines)
         lines.append("")
 
     # Versions come from the results file, where orchestrate.py derived them
     # from repository state. Never from a string typed by hand into a backend.
     resolved = results.get("versions", {})
-    versions = ", ".join(f"{name} {resolved.get(key, 'unresolved')}" for key, name in NAMES.items())
+    versions = ", ".join(f"{name} {_short_version(resolved.get(key, 'unresolved'))}"
+                         for key, name in NAMES.items())
     lines.append(f"Versions: {versions}.")
-
-    raw_launch_failures = results.get("launchFailures") or {}
-    # Iterate in the table's own backend order (README order), not whatever
-    # order the JSON's launchFailures dict happens to carry: orchestrate.py
-    # builds it from an internal BACKENDS list unrelated to README order.
-    launch_failures = [(name, raw_launch_failures[b]) for b, name in NAMES.items()
-                       if raw_launch_failures.get(b)]
-    if launch_failures:
-        fails = ", ".join(f"{name} {n}" for name, n in launch_failures)
-        lines += [
-            "",
-            "Launch failures during this session (the process crashed or refused to become "
-            "ready on a launch attempt; every failed attempt is counted, whether or not a "
-            f"later attempt in the same cell went on to succeed): {fails}.",
-        ]
 
     lines += [
         "",

@@ -6,7 +6,13 @@
     "settle": 15, "measure": 60, "cooldown": 60, "repeats": 3,
     "max_launch_attempts": 5, "gate_threshold": 0.95
   },
-  "launchFailures": {"aether": 0, "avplayer": 0, "vlckit": 2, "ksplayer": 15, "mpv": 0},
+  "launchFailures": {
+    "aether": {"hevc-4k-hdr10.mp4": 0},
+    "avplayer": {"hevc-4k-hdr10.mp4": 0},
+    "vlckit": {"hevc-4k-hdr10.mp4": 1},
+    "ksplayer": {"hevc-4k-hdr10.mp4": 1, "h264-1080p.mp4": 0, "av1-10bit.mkv": 15},
+    "mpv": {"hevc-4k-hdr10.mp4": 0}
+  },
   "versions": {
     "aether": "6.26.0", "avplayer": "macOS 26.5.2", "vlckit": "4.0.0-alpha.21",
     "ksplayer": "2.3.4", "mpv": "mpv v0.41.0 Copyright (c) 2000-2025 mpv/MPlayer/mplayer2 projects"

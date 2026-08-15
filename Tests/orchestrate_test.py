@@ -395,13 +395,13 @@ class LaunchWithRetryTests(unittest.TestCase):
         with mock.patch.object(orchestrate, "launch", return_value=fake_proc) as launch_mock, \
              mock.patch.object(orchestrate, "spawn_and_settle", side_effect=outcomes), \
              mock.patch("time.sleep"):
-            failures = {"aether": 0}
+            failures = {"aether": {"h264-1080p.mp4": 0}}
             proc, pid, attempts, report_path, reason = orchestrate.launch_with_retry(
                 "aether", "h264-1080p.mp4", "/fake/full/path/h264-1080p.mp4",
                 lambda attempt: f"/tmp/fake-{attempt}.json",
                 orchestrate.ProtocolConfig(max_launch_attempts=5), failures)
         self.assertEqual(attempts, 2)
-        self.assertEqual(failures["aether"], 1)
+        self.assertEqual(failures["aether"]["h264-1080p.mp4"], 1)
         self.assertEqual(pid, 42)
         self.assertIsNotNone(proc)
         # Regression guard: launch() must receive the resolved fixture_path
@@ -419,7 +419,7 @@ class LaunchWithRetryTests(unittest.TestCase):
              mock.patch.object(orchestrate, "spawn_and_settle",
                                 return_value=(None, "crashed during settle (exit 1)")), \
              mock.patch("time.sleep"):
-            failures = {"vlckit": 0}
+            failures = {"vlckit": {"vp9.webm": 0}}
             proc, pid, attempts, report_path, reason = orchestrate.launch_with_retry(
                 "vlckit", "vp9.webm", "/fake/vp9.webm",
                 lambda attempt: f"/tmp/fake-{attempt}.json",
@@ -427,8 +427,27 @@ class LaunchWithRetryTests(unittest.TestCase):
         self.assertIsNone(proc)
         self.assertIsNone(pid)
         self.assertEqual(attempts, 3)
-        self.assertEqual(failures["vlckit"], 3)
+        self.assertEqual(failures["vlckit"]["vp9.webm"], 3)
         self.assertIn("crashed during settle", reason)
+
+    def test_failures_are_keyed_per_fixture_not_pooled_session_wide(self):
+        # A renderer showing one session-wide count underneath every
+        # fixture's table would re-bill every fixture an engine did not
+        # fail on with failures that actually all happened elsewhere. The
+        # source of truth has to distinguish them: two failing launches
+        # against one fixture must not be visible under a different one.
+        fake_proc = FakeProc(pid=1)
+        failures = {"ksplayer": {"av1-10bit.mkv": 0, "hevc-4k-hdr10.mp4": 0}}
+        with mock.patch.object(orchestrate, "launch", return_value=fake_proc), \
+             mock.patch.object(orchestrate, "spawn_and_settle",
+                                return_value=(None, "crashed during settle (exit 1)")), \
+             mock.patch("time.sleep"):
+            orchestrate.launch_with_retry(
+                "ksplayer", "av1-10bit.mkv", "/fake/av1-10bit.mkv",
+                lambda attempt: f"/tmp/fake-{attempt}.json",
+                orchestrate.ProtocolConfig(max_launch_attempts=3), failures)
+        self.assertEqual(failures["ksplayer"]["av1-10bit.mkv"], 3)
+        self.assertEqual(failures["ksplayer"]["hevc-4k-hdr10.mp4"], 0)
 
 
 class MeasureOnceGuardedSamplingTests(unittest.TestCase):

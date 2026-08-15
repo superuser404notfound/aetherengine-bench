@@ -411,10 +411,16 @@ def launch(backend, fixture_path, report_path, cfg):
 def launch_with_retry(backend, fixture, fixture_path, report_path_for_attempt, cfg, launch_failures):
     """Retries a launch that crashes before the player ever came up, up to
     cfg.max_launch_attempts times. Every crashed attempt increments
-    launch_failures[backend], counted whether or not a later attempt
-    succeeds: silently retrying until it works would flatter an engine with
-    a flaky launcher, and this repo's whole point is to publish the real
-    number.
+    launch_failures[backend][fixture], counted whether or not a later
+    attempt succeeds: silently retrying until it works would flatter an
+    engine with a flaky launcher, and this repo's whole point is to publish
+    the real number.
+
+    Keyed by (backend, fixture), not just backend: a renderer that shows a
+    session-wide count underneath one fixture's table would re-bill every
+    fixture an engine did not fail on with failures that actually all
+    happened on a different, harder fixture, silently multiplying the
+    apparent failure rate for every fixture except the one that earned it.
 
     report_path_for_attempt(attempt) returns a fresh path per attempt, and
     any stale file at that path is removed before spawning: a crashed
@@ -433,7 +439,8 @@ def launch_with_retry(backend, fixture, fixture_path, report_path_for_attempt, c
         player_pid, reason = spawn_and_settle(proc, comm_name, cfg.settle)
         if player_pid is not None:
             return proc, player_pid, attempts, report_path, None
-        launch_failures[backend] = launch_failures.get(backend, 0) + 1
+        per_backend = launch_failures.setdefault(backend, {})
+        per_backend[fixture] = per_backend.get(fixture, 0) + 1
         if proc.poll() is None:
             proc.terminate()
             try:
@@ -659,7 +666,12 @@ def run_session(cfg, fixtures, backends, output_dir, dry_run=False, report_dir=p
             print(f"warning: fixture does not exist on disk: {f} (runs against it will "
                   f"be recorded as discarded launch failures, not silently skipped)")
 
-    launch_failures = {b: 0 for b in backends}
+    # Keyed by (backend, fixture): a session-wide-only count would force the
+    # renderer to either show one number under every fixture's table (see
+    # launch_with_retry's docstring for why that misattributes failures) or
+    # drop the information entirely. Nested by backend then fixture because
+    # JSON object keys must be strings, not tuples.
+    launch_failures = {b: {f: 0 for f in fixtures} for b in backends}
     records = []
 
     machine = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"],
