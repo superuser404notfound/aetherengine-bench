@@ -19,3 +19,24 @@ struct BenchReport: Codable {
     let startedAt: Date
     let endedAt: Date
 }
+
+/// This JSON is written by Swift and by a shell script, and read by Python, so
+/// the date format cannot be left to a default. Foundation's default encodes a
+/// bare seconds-since-2001 double, which neither of the other two would produce
+/// or recognise. ISO 8601 is the one format all three speak.
+extension JSONEncoder {
+    static var bench: JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }
+}
+
+extension JSONDecoder {
+    static var bench: JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }
+}
