@@ -2,14 +2,18 @@ import AetherEngine
 import AppKit
 import Combine
 
-/// `AetherEngine` exposes no runtime version API (checked against the whole
-/// `Sources/AetherEngine` tree and `docs/api.md` at the pinned revision, not
-/// just the docs). This literal is the release tag the pin in `project.yml`
-/// resolves to: revision `73354ec8c6d20ca954b1874254b69fa19e2ffce5` is tag
-/// `6.26.0`, confirmed with `git describe --tags` against that revision in
-/// the AetherEngine checkout. Update by hand whenever that revision moves;
-/// nothing derives it automatically because `Package.resolved` records the
-/// revision, not the tag it corresponds to.
+/// Convenience label only. `AetherEngine` exposes no runtime version API
+/// (checked against the whole `Sources/AetherEngine` tree and `docs/api.md`
+/// at the pinned revision, not just the docs), so this cannot be read live
+/// and must not try to be (no `git describe` shell-out from the backend).
+/// The version the benchmark actually publishes comes from `orchestrate.py`,
+/// which derives it from repository state at report time (`git describe`
+/// against `.build/SourcePackages/checkouts/AetherEngine`, which is already
+/// a tag-complete clone the build produced). This literal mirrors the tag
+/// the pin in `project.yml` currently resolves to, for anyone reading a
+/// standalone `AetherBench` report outside that pipeline; it is not the
+/// source of truth and can go stale if `project.yml`'s `revision:` moves
+/// without a matching edit here.
 private let aetherEngineReleaseVersion = "6.26.0"
 
 @MainActor
@@ -21,34 +25,36 @@ final class AetherBackend: BenchBackend {
     private var cancellables = Set<AnyCancellable>()
     private var loadedOutput: OutputInfo?
     private var lastDropped = 0
-    private var integratedFrames = 0.0
-    private var sawSoftwareFps = false
+    private var isSoftwarePath = false
 
     var view: NSView { surface }
     var output: OutputInfo? { loadedOutput }
     var droppedFrames: Int { lastDropped }
 
     /// `LiveTelemetry.observedFps` is populated only on the software path
-    /// (`SoftwarePlaybackHost`); it is nil on native AVPlayer playback,
-    /// which has no live fps counter to report. So delivered frames must be
-    /// derived differently per path, never by one formula covering both:
+    /// (`SoftwarePlaybackHost`) and nil on native AVPlayer playback, which
+    /// has no live fps counter at all. It is a reliable path discriminator
+    /// (`isSoftwarePath`), but not a reliable frame count: it is a 10-second
+    /// *rolling average* (`LiveTelemetrySampler`'s `RollingWindow<Int64>`),
+    /// so integrating it double-counts the startup ramp for as long as that
+    /// ramp sits inside the window, undercounting a short measure window by
+    /// a wide margin. `engine.softwareHostFramesEnqueued` is the engine's
+    /// own exact monotonic counter for the same signal (frames the SW host
+    /// enqueued into `AVSampleBufferDisplayLayer`, zero on native / pre-start,
+    /// restarts at zero on a new `load()`), so the software branch reads
+    /// that directly instead of integrating a rate.
     ///
-    /// - Software: `observedFps` is a rate sampled at 1 Hz
-    ///   (`diagnostics.liveTelemetry`'s documented cadence), so summing the
-    ///   value once per tick approximates its time integral, i.e. frames
-    ///   actually decoded.
-    /// - Native: there is nothing to integrate, so this falls back to
-    ///   elapsed playback time times the nominal rate, exactly like
-    ///   `AVPlayerBackend`. It is optimistic (it cannot see frames AVPlayer
-    ///   never admits to), which is why it is gated on `sawSoftwareFps`
-    ///   rather than tried first: falling back to it on the software path
-    ///   too would silently paper over the one thing this backend exists to
-    ///   report honestly.
+    /// The native path has no equivalent counter, so it falls back to
+    /// elapsed playback time times the nominal rate, exactly like
+    /// `AVPlayerBackend`. It is optimistic (it cannot see frames AVPlayer
+    /// never admits to); the doc comment there states the same limitation,
+    /// this is a gate-only proxy, never a quality number to compare against
+    /// an engine with a real counter.
     ///
-    /// Both branches subtract `lastDropped`, mirroring `AVPlayerBackend`.
+    /// Both branches subtract `lastDropped`.
     var deliveredFrames: Int {
-        if sawSoftwareFps {
-            return max(0, Int(integratedFrames) - lastDropped)
+        if isSoftwarePath {
+            return max(0, engine.softwareHostFramesEnqueued - lastDropped)
         }
         return max(0, Int(engine.currentTime * nominalFrameRate) - lastDropped)
     }
@@ -67,9 +73,10 @@ final class AetherBackend: BenchBackend {
                 // telemetry tick's field is optional per-sample; a nil tick
                 // keeps the last known count rather than resetting to 0.
                 self.lastDropped = telemetry.droppedFrameCount ?? self.lastDropped
-                if let fps = telemetry.observedFps, fps > 0 {
-                    self.sawSoftwareFps = true
-                    self.integratedFrames += fps
+                // observedFps is only ever non-nil on the software path, so
+                // its presence (not its value) is what selects the branch.
+                if telemetry.observedFps != nil {
+                    self.isSoftwarePath = true
                 }
             }
             .store(in: &cancellables)
@@ -90,6 +97,11 @@ final class AetherBackend: BenchBackend {
             width: Int(probe.videoWidth),
             height: Int(probe.videoHeight),
             bitDepth: Self.bitDepth(for: probe.videoFormat),
+            // Informational per engine only, never comparable across
+            // backends: AVPlayerBackend puts a raw AVFoundation transfer-
+            // function tag (e.g. "SMPTE_ST_2084_PQ") in this same field,
+            // this backend puts a VideoFormat case name (e.g. "hdr10").
+            // Same field name, different kind of string.
             colorTransfer: String(describing: probe.videoFormat),
             audioChannels: probe.audioTracks.first?.channels ?? 0)
     }
