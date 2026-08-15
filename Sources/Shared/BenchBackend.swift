@@ -32,4 +32,16 @@ protocol BenchBackend: AnyObject {
     /// measurement window should have contained.
     var nominalFrameRate: Double { get }
     var output: OutputInfo? { get }
+    /// Which concrete engine/path actually served the loaded session, for
+    /// backends that pick between more than one internal implementation the
+    /// way a real host of that engine would (e.g. KSPlayer trying its
+    /// primary AVPlayer path before falling back to its own FFmpeg engine).
+    /// Which engine served which fixture is itself a result worth
+    /// publishing, not just an implementation detail. Defaults to nil for
+    /// backends with a single playback path.
+    var servingPath: String? { get }
+}
+
+extension BenchBackend {
+    var servingPath: String? { nil }
 }

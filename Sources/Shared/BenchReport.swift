@@ -18,6 +18,10 @@ struct BenchReport: Codable {
     let output: OutputInfo
     let startedAt: Date
     let endedAt: Date
+    /// Which concrete engine/path served this session, for backends that
+    /// pick between more than one (see `BenchBackend.servingPath`). nil for
+    /// backends with a single playback path.
+    let servingPath: String?
 }
 
 /// This JSON is written by Swift and by a shell script, and read by Python, so

@@ -26,15 +26,24 @@ final class BenchRunner {
             try await Task.sleep(for: .seconds(arguments.measure))
             let ended = Date()
             guard let output = backend.output else { throw BackendError.noOutputDescription }
+            // -1 means "not reported by this engine/path" (see
+            // KSPlayerBackend.droppedFrames), not zero. A plain subtraction
+            // would turn that sentinel into a fabricated delta (e.g.
+            // -1 - -1 = 0, clamped to 0 by max(0, ...)), which reads exactly
+            // like a real zero-drops measurement. If either endpoint is
+            // unreported, the whole window is unreported.
+            let droppedFrames = (backend.droppedFrames < 0 || dropsAtStart < 0)
+                ? -1 : max(0, backend.droppedFrames - dropsAtStart)
             let report = BenchReport(
                 backend: arguments.backend.rawValue,
                 engineVersion: type(of: backend).engineVersion,
                 fixture: arguments.url.lastPathComponent,
                 deliveredFrames: max(0, backend.deliveredFrames - framesAtStart),
-                droppedFrames: max(0, backend.droppedFrames - dropsAtStart),
+                droppedFrames: droppedFrames,
                 expectedFrames: Int(arguments.measure * backend.nominalFrameRate),
                 output: output,
-                startedAt: started, endedAt: ended)
+                startedAt: started, endedAt: ended,
+                servingPath: backend.servingPath)
             try JSONEncoder.bench.encode(report).write(to: arguments.reportURL)
             backend.stop()
         } catch {
