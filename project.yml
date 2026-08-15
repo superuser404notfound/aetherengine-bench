@@ -44,6 +44,7 @@ targets:
     settings:
       base:
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: BACKEND_AETHER
+        GENERATE_INFOPLIST_FILE: YES
     dependencies:
       - package: AetherEngine
   AVBench:
@@ -65,6 +66,7 @@ targets:
     settings:
       base:
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: BACKEND_AVPLAYER
+        GENERATE_INFOPLIST_FILE: YES
   VLCBench:
     type: tool
     platform: macOS
@@ -87,6 +89,7 @@ targets:
     settings:
       base:
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: BACKEND_VLCKIT
+        GENERATE_INFOPLIST_FILE: YES
     dependencies:
       - package: VLCKit
         product: VLCKitSPM

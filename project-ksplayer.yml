@@ -34,6 +34,7 @@ targets:
     settings:
       base:
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: BACKEND_KSPLAYER
+        GENERATE_INFOPLIST_FILE: YES
     dependencies:
       - package: KSPlayer
 schemes:
