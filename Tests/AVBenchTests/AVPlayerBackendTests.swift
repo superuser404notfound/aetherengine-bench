@@ -45,15 +45,19 @@ import AVFoundation
 // AVPlayer has no AV1 decoder at all on this platform: a deterministic
 // capability gap, not a malfunction. Verified live before writing this
 // classifier: asset.loadTracks(withMediaType:) throws a plain NSError for
-// this fixture, AVFoundationErrorDomain code -11828 ("Cannot Open"),
-// localizedFailureReason "This media format is not supported." classify()
-// exists specifically to turn that into BackendError.unsupportedFormat so
-// BenchRunner exits with the distinct REFUSAL code instead of the generic
-// crash exit, and orchestrate.py records it once instead of retrying a
-// launch that was never going to succeed. This is the one guarantee this
-// test actually needs: whatever AVFoundation's exact wording is on a given
-// OS release, it must not surface as .noVideoTrack/.noOutputDescription or
-// any other case that reads as a crash to BenchRunner.
+// this fixture, AVFoundationErrorDomain code -11828 (AVError.Code
+// .fileFormatNotRecognized). classify() exists specifically to turn that
+// into BackendError.unsupportedFormat so BenchRunner exits with the
+// distinct REFUSAL code instead of the generic crash exit, and
+// orchestrate.py records it once instead of retrying a launch that was
+// never going to succeed. classify() matches on this numeric code, not on
+// localizedFailureReason text, precisely because the text is locale-
+// dependent (on a German-locale machine it reads "Das Medienformat wird
+// nicht unterstuetzt.", not any English substring) while the code is not.
+// This is the one guarantee this test actually needs: whatever AVFoundation
+// reports for this fixture on a given OS release/locale, it must not
+// surface as .noVideoTrack/.noOutputDescription or any other case that
+// reads as a crash to BenchRunner.
 @MainActor
 @Test func avplayerBackendRefusesAV1AsUnsupportedFormatNotACrash() async throws {
     let fixture = URL(fileURLWithPath: NSString(string: "~/Dev/aetherengine-bench/Fixtures/av1-10bit.mkv").expandingTildeInPath)

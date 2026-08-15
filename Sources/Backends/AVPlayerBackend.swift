@@ -62,24 +62,43 @@ final class AVPlayerBackend: BenchBackend {
                                   bitDepth: depth, colorTransfer: transfer, audioChannels: channels)
     }
 
-    /// AVFoundation throws a plain NSError, not a typed BackendError, when
-    /// it recognizes a container but has no decoder for the codec inside
-    /// it: verified live against this repo's own av1-10bit.mkv fixture,
-    /// AVFoundationErrorDomain code -11828 ("Cannot Open"),
-    /// localizedFailureReason "This media format is not supported." That is
+    /// AVFoundation throws a plain NSError, not a typed BackendError, when it
+    /// recognizes a container but has no decoder for the codec inside it:
+    /// verified live against this repo's own av1-10bit.mkv fixture,
+    /// AVFoundationErrorDomain code -11828, the named AVError.Code
+    /// .fileFormatNotRecognized (confirmed against AVError.h). That is
     /// AVPlayer correctly and deterministically refusing a format it was
     /// never going to support (it has no AV1 decoder at all), not a crash;
     /// see BackendError.unsupportedFormat for why that distinction matters
-    /// downstream. Matched on domain plus the localizedFailureReason
-    /// substring rather than the numeric code alone, since that is the
-    /// specific, human-readable signal actually observed and the code's
-    /// exact named case was not confirmed independently. Any other thrown
-    /// error is a genuine, unclassified failure and passes through
-    /// unchanged, still a crash as far as this binary is concerned.
+    /// downstream.
+    ///
+    /// Matched on the numeric code, not on localizedFailureReason text: an
+    /// earlier version of this classifier looked for "not supported" in
+    /// that string, which is what NSError localizes for the process's
+    /// current locale. On a German-locale machine it reads "Das
+    /// Medienformat wird nicht unterstuetzt." instead, the substring match
+    /// misses it, and the raw NSError falls through unclassified, exactly
+    /// the failure this classifier exists to prevent (reproduced live, not
+    /// theoretical). The numeric code is stable across locales. decoderNotFound
+    /// and formatUnsupported are included alongside fileFormatNotRecognized
+    /// since both are also named specifically for a missing codec/format
+    /// capability and could plausibly be what a different OS release reports
+    /// for the same AV1-in-MKV gap; genuine decode-failure codes
+    /// (decodeFailed, invalidSourceMedia, undecodableMediaData, ...) are
+    /// deliberately not in this set, since those mean a format AVPlayer does
+    /// support failed to decode, a real malfunction, not a capability gap.
+    /// Any other thrown error is a genuine, unclassified failure and passes
+    /// through unchanged, still a crash as far as this binary is concerned.
+    private static let unsupportedFormatCodes: Set<Int> = [
+        AVError.Code.fileFormatNotRecognized.rawValue,
+        AVError.Code.decoderNotFound.rawValue,
+        AVError.Code.formatUnsupported.rawValue,
+    ]
+
     private static func classify(_ error: Error) -> Error {
         let nsError = error as NSError
         guard nsError.domain == AVFoundationErrorDomain,
-              (nsError.localizedFailureReason ?? "").localizedCaseInsensitiveContains("not supported")
+              unsupportedFormatCodes.contains(nsError.code)
         else { return error }
         return BackendError.unsupportedFormat(nsError.localizedFailureReason ?? nsError.localizedDescription)
     }
