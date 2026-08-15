@@ -15,9 +15,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "77C58DC865BABD73AACA5D13"
-               BuildableName = "BenchHarness.app"
-               BlueprintName = "BenchHarness"
+               BlueprintIdentifier = "98AAE18330A8659487CFC451"
+               BuildableName = "AVBench.app"
+               BlueprintName = "AVBench"
                ReferencedContainer = "container:AetherBench.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -46,9 +46,9 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "77C58DC865BABD73AACA5D13"
-            BuildableName = "BenchHarness.app"
-            BlueprintName = "BenchHarness"
+            BlueprintIdentifier = "98AAE18330A8659487CFC451"
+            BuildableName = "AVBench.app"
+            BlueprintName = "AVBench"
             ReferencedContainer = "container:AetherBench.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
@@ -82,9 +82,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "77C58DC865BABD73AACA5D13"
-            BuildableName = "BenchHarness.app"
-            BlueprintName = "BenchHarness"
+            BlueprintIdentifier = "98AAE18330A8659487CFC451"
+            BuildableName = "AVBench.app"
+            BlueprintName = "AVBench"
             ReferencedContainer = "container:AetherBench.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -99,9 +99,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "77C58DC865BABD73AACA5D13"
-            BuildableName = "BenchHarness.app"
-            BlueprintName = "BenchHarness"
+            BlueprintIdentifier = "98AAE18330A8659487CFC451"
+            BuildableName = "AVBench.app"
+            BlueprintName = "AVBench"
             ReferencedContainer = "container:AetherBench.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

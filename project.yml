@@ -22,40 +22,79 @@ packages:
   VLCKit:
     url: https://github.com/virtualox/vlckit-spm
     exactVersion: 4.0.0-alpha.21
-  KSPlayer:
-    url: https://github.com/kingslay/KSPlayer
-    exactVersion: 2.3.4
 targets:
-  BenchHarness:
+  AetherBench:
     type: application
     platform: macOS
     sources:
-      - path: Sources/BenchHarness
+      - path: Sources/Shared
+      - path: Sources/Backends/AetherBackend.swift
     info:
-      path: Sources/BenchHarness/Info.plist
+      path: Sources/Shared/Info.plist
       properties:
         CFBundleDisplayName: AetherBench
         LSMinimumSystemVersion: "14.0"
-        LSUIElement: false
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
+    settings:
+      base:
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: BACKEND_AETHER
     dependencies:
       - package: AetherEngine
+  AVBench:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/Shared
+      - path: Sources/Backends/AVPlayerBackend.swift
+    info:
+      path: Sources/Shared/Info.plist
+      properties:
+        CFBundleDisplayName: AVBench
+        LSMinimumSystemVersion: "14.0"
+    settings:
+      base:
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: BACKEND_AVPLAYER
+  VLCBench:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/Shared
+      - path: Sources/Backends/VLCKitBackend.swift
+    info:
+      path: Sources/Shared/Info.plist
+      properties:
+        CFBundleDisplayName: VLCBench
+        LSMinimumSystemVersion: "14.0"
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+    settings:
+      base:
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: BACKEND_VLCKIT
+    dependencies:
       - package: VLCKit
-      - package: KSPlayer
+        product: VLCKitSPM
   BenchHarnessTests:
     type: bundle.unit-test
     platform: macOS
     sources:
       - path: Tests/BenchHarnessTests
     dependencies:
-      - target: BenchHarness
+      - target: AVBench
 schemes:
-  BenchHarness:
+  AetherBench:
     build:
       targets:
-        BenchHarness: all
+        AetherBench: all
+  AVBench:
+    build:
+      targets:
+        AVBench: all
         BenchHarnessTests: [test]
     test:
       targets:
         - BenchHarnessTests
+  VLCBench:
+    build:
+      targets:
+        VLCBench: all

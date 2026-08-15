@@ -7,35 +7,52 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		1854813ECD505DE9BA581AA8 /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = D2A0220399F53D09BE95FDB2 /* KSPlayer */; };
-		54842CE53F3C7A970AD70661 /* VLCKit in Frameworks */ = {isa = PBXBuildFile; productRef = BEEE46398E9EF76B27E7240F /* VLCKit */; };
-		BAC011D687637053E9588229 /* AetherEngine in Frameworks */ = {isa = PBXBuildFile; productRef = 74C8F657AE3DF283D40F1547 /* AetherEngine */; };
+		1FF61BF550BD2213EA80EFA0 /* AetherBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01EC7F4D6CCE785DA4637BBA /* AetherBackend.swift */; };
+		34F7950E02E77B474A631D87 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1C4DB1FEC7C68EDEFDD27 /* main.swift */; };
+		42E785CC969B279D3BA09DA4 /* VLCKitSPM in Frameworks */ = {isa = PBXBuildFile; productRef = D0631080D0E20E9C5B301BE4 /* VLCKitSPM */; };
+		B2D8D42E09D732620E1A21A8 /* VLCKitBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4CE92192C20DF62D27EFF43 /* VLCKitBackend.swift */; };
+		B2DDD0CC7A4C0FFB5C249963 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1C4DB1FEC7C68EDEFDD27 /* main.swift */; };
+		BCF808A04BE1EB094438DA36 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1C4DB1FEC7C68EDEFDD27 /* main.swift */; };
+		DDDBAE9C5CD82A007F3E0B9A /* AetherEngine in Frameworks */ = {isa = PBXBuildFile; productRef = 860117A5A96DB12D6293F2B2 /* AetherEngine */; };
+		F947168733B8520676B4FD20 /* AVPlayerBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4943A793DE0089C443CAF03 /* AVPlayerBackend.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		35B03827B61CD7E54FD2ABE9 /* PBXContainerItemProxy */ = {
+		67F50A3EA230E7551F7EA752 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 6D796561EDC4AE730092FF76 /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = 77C58DC865BABD73AACA5D13;
-			remoteInfo = BenchHarness;
+			remoteGlobalIDString = 98AAE18330A8659487CFC451;
+			remoteInfo = AVBench;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		11A56A61398E1D84583B1F62 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		01EC7F4D6CCE785DA4637BBA /* AetherBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AetherBackend.swift; sourceTree = "<group>"; };
+		05B1C4DB1FEC7C68EDEFDD27 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		07DA01C0ED724FDCBE93379D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		48B0B9024B8755905C4BBD03 /* AVBench.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AVBench.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8AF0C830F8A5EC87CD8E3F78 /* BenchHarnessTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BenchHarnessTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		E7C3F19E40298BC466F92E9B /* BenchHarness.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BenchHarness.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E0301683F98A45A19A38A14C /* AetherBench.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AetherBench.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E4CE92192C20DF62D27EFF43 /* VLCKitBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VLCKitBackend.swift; sourceTree = "<group>"; };
+		ED19AF73614DBDB4B0E9ABF1 /* VLCBench.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VLCBench.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F4943A793DE0089C443CAF03 /* AVPlayerBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AVPlayerBackend.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		AE5F4416CF34CA4B4AEBB779 /* Frameworks */ = {
+		332F5963AF166BDB5E9BB203 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BAC011D687637053E9588229 /* AetherEngine in Frameworks */,
-				54842CE53F3C7A970AD70661 /* VLCKit in Frameworks */,
-				1854813ECD505DE9BA581AA8 /* KSPlayer in Frameworks */,
+				42E785CC969B279D3BA09DA4 /* VLCKitSPM in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EFE0D014DED63931D3A695C6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DDDBAE9C5CD82A007F3E0B9A /* AetherEngine in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -45,17 +62,10 @@
 		0510A9E49E44E32942758195 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
-				2F80F86C77A595F152A794FF /* BenchHarness */,
+				FB81DADD0C10F1971839174A /* Backends */,
+				7E2FFF42529FC6608FB111CD /* Shared */,
 			);
 			path = Sources;
-			sourceTree = "<group>";
-		};
-		2F80F86C77A595F152A794FF /* BenchHarness */ = {
-			isa = PBXGroup;
-			children = (
-				11A56A61398E1D84583B1F62 /* Info.plist */,
-			);
-			path = BenchHarness;
 			sourceTree = "<group>";
 		};
 		6FF30FEE7E2F508668651370 /* Tests */ = {
@@ -75,11 +85,22 @@
 			);
 			sourceTree = "<group>";
 		};
+		7E2FFF42529FC6608FB111CD /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				07DA01C0ED724FDCBE93379D /* Info.plist */,
+				05B1C4DB1FEC7C68EDEFDD27 /* main.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
 		7FB736B1370296FFAFE8CD06 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				E7C3F19E40298BC466F92E9B /* BenchHarness.app */,
+				E0301683F98A45A19A38A14C /* AetherBench.app */,
+				48B0B9024B8755905C4BBD03 /* AVBench.app */,
 				8AF0C830F8A5EC87CD8E3F78 /* BenchHarnessTests.xctest */,
+				ED19AF73614DBDB4B0E9ABF1 /* VLCBench.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -91,28 +112,36 @@
 			path = BenchHarnessTests;
 			sourceTree = "<group>";
 		};
+		FB81DADD0C10F1971839174A /* Backends */ = {
+			isa = PBXGroup;
+			children = (
+				01EC7F4D6CCE785DA4637BBA /* AetherBackend.swift */,
+				F4943A793DE0089C443CAF03 /* AVPlayerBackend.swift */,
+				E4CE92192C20DF62D27EFF43 /* VLCKitBackend.swift */,
+			);
+			path = Backends;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		77C58DC865BABD73AACA5D13 /* BenchHarness */ = {
+		451B6CD8AF38646EBBDFDEAB /* VLCBench */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 903ACD89842C4BAACCE772D8 /* Build configuration list for PBXNativeTarget "BenchHarness" */;
+			buildConfigurationList = 4E8C97E0B9CDAA2E4C7BF6E9 /* Build configuration list for PBXNativeTarget "VLCBench" */;
 			buildPhases = (
-				C6997EC65881C01954A02667 /* Sources */,
-				AE5F4416CF34CA4B4AEBB779 /* Frameworks */,
+				8FBB30DFE9C7AA37D8652AA8 /* Sources */,
+				332F5963AF166BDB5E9BB203 /* Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
-			name = BenchHarness;
+			name = VLCBench;
 			packageProductDependencies = (
-				74C8F657AE3DF283D40F1547 /* AetherEngine */,
-				BEEE46398E9EF76B27E7240F /* VLCKit */,
-				D2A0220399F53D09BE95FDB2 /* KSPlayer */,
+				D0631080D0E20E9C5B301BE4 /* VLCKitSPM */,
 			);
-			productName = BenchHarness;
-			productReference = E7C3F19E40298BC466F92E9B /* BenchHarness.app */;
+			productName = VLCBench;
+			productReference = ED19AF73614DBDB4B0E9ABF1 /* VLCBench.app */;
 			productType = "com.apple.product-type.application";
 		};
 		8B929E60A02CB1DAA7952C8F /* BenchHarnessTests */ = {
@@ -124,7 +153,7 @@
 			buildRules = (
 			);
 			dependencies = (
-				8119CB27001824525247A2DE /* PBXTargetDependency */,
+				5B9FAD2F33AF00C901245361 /* PBXTargetDependency */,
 			);
 			name = BenchHarnessTests;
 			packageProductDependencies = (
@@ -132,6 +161,42 @@
 			productName = BenchHarnessTests;
 			productReference = 8AF0C830F8A5EC87CD8E3F78 /* BenchHarnessTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		98AAE18330A8659487CFC451 /* AVBench */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8D6B6A27A6E2320658F68CB8 /* Build configuration list for PBXNativeTarget "AVBench" */;
+			buildPhases = (
+				62A8713B25CB1E81ACA0FA1F /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AVBench;
+			packageProductDependencies = (
+			);
+			productName = AVBench;
+			productReference = 48B0B9024B8755905C4BBD03 /* AVBench.app */;
+			productType = "com.apple.product-type.application";
+		};
+		E19F2AD754868B1700CA6FBF /* AetherBench */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0B9DC6C328C17148C2F94280 /* Build configuration list for PBXNativeTarget "AetherBench" */;
+			buildPhases = (
+				21C39A27D395FA313FA68529 /* Sources */,
+				EFE0D014DED63931D3A695C6 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AetherBench;
+			packageProductDependencies = (
+				860117A5A96DB12D6293F2B2 /* AetherEngine */,
+			);
+			productName = AetherBench;
+			productReference = E0301683F98A45A19A38A14C /* AetherBench.app */;
+			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
@@ -155,7 +220,6 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				CB38DD9964A90A4ADA9BB598 /* XCRemoteSwiftPackageReference "AetherEngine" */,
-				F2E30B6C5C37DDAA8F784D94 /* XCRemoteSwiftPackageReference "KSPlayer" */,
 				4360DA1D410BF382B0552FE4 /* XCRemoteSwiftPackageReference "vlckit-spm" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -163,21 +227,43 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				77C58DC865BABD73AACA5D13 /* BenchHarness */,
+				98AAE18330A8659487CFC451 /* AVBench */,
+				E19F2AD754868B1700CA6FBF /* AetherBench */,
 				8B929E60A02CB1DAA7952C8F /* BenchHarnessTests */,
+				451B6CD8AF38646EBBDFDEAB /* VLCBench */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXSourcesBuildPhase section */
-		C20F2448FC9C12463AE3E5F0 /* Sources */ = {
+		21C39A27D395FA313FA68529 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1FF61BF550BD2213EA80EFA0 /* AetherBackend.swift in Sources */,
+				BCF808A04BE1EB094438DA36 /* main.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		C6997EC65881C01954A02667 /* Sources */ = {
+		62A8713B25CB1E81ACA0FA1F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F947168733B8520676B4FD20 /* AVPlayerBackend.swift in Sources */,
+				34F7950E02E77B474A631D87 /* main.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8FBB30DFE9C7AA37D8652AA8 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B2D8D42E09D732620E1A21A8 /* VLCKitBackend.swift in Sources */,
+				B2DDD0CC7A4C0FFB5C249963 /* main.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C20F2448FC9C12463AE3E5F0 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -187,26 +273,27 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		8119CB27001824525247A2DE /* PBXTargetDependency */ = {
+		5B9FAD2F33AF00C901245361 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 77C58DC865BABD73AACA5D13 /* BenchHarness */;
-			targetProxy = 35B03827B61CD7E54FD2ABE9 /* PBXContainerItemProxy */;
+			target = 98AAE18330A8659487CFC451 /* AVBench */;
+			targetProxy = 67F50A3EA230E7551F7EA752 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		354014042C12FEA72FB5D4B0 /* Release */ = {
+		3098A3E5360C830C30C971BA /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				COMBINE_HIDPI_IMAGES = YES;
-				INFOPLIST_FILE = Sources/BenchHarness/Info.plist;
+				INFOPLIST_FILE = Sources/Shared/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = de.superuser404.BenchHarness;
+				PRODUCT_BUNDLE_IDENTIFIER = de.superuser404.AetherBench;
 				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = BACKEND_AETHER;
 			};
 			name = Release;
 		};
@@ -276,21 +363,6 @@
 			};
 			name = Debug;
 		};
-		3A09C15273864363C21FD57F /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				COMBINE_HIDPI_IMAGES = YES;
-				INFOPLIST_FILE = Sources/BenchHarness/Info.plist;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = de.superuser404.BenchHarness;
-				SDKROOT = macosx;
-			};
-			name = Debug;
-		};
 		5C5EFD7DFA97293CB2BC3550 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -303,7 +375,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = de.superuser404.BenchHarnessTests;
 				SDKROOT = macosx;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BenchHarness.app/Contents/MacOS/BenchHarness";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AVBench.app/Contents/MacOS/AVBench";
 			};
 			name = Debug;
 		};
@@ -319,7 +391,87 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = de.superuser404.BenchHarnessTests;
 				SDKROOT = macosx;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BenchHarness.app/Contents/MacOS/BenchHarness";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AVBench.app/Contents/MacOS/AVBench";
+			};
+			name = Release;
+		};
+		B02A8F0FDF68D6432FA8B862 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = Sources/Shared/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = de.superuser404.AetherBench;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = BACKEND_AETHER;
+			};
+			name = Debug;
+		};
+		C28578F1EFA64E908F08D870 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = Sources/Shared/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = de.superuser404.AVBench;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = BACKEND_AVPLAYER;
+			};
+			name = Release;
+		};
+		C4F7071FFC5697EAA44F7E05 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = Sources/Shared/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = de.superuser404.VLCBench;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = BACKEND_VLCKIT;
+			};
+			name = Debug;
+		};
+		DE52BD7A3DA622C105F16B5F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = Sources/Shared/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = de.superuser404.AVBench;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = BACKEND_AVPLAYER;
+			};
+			name = Debug;
+		};
+		E78B01A458A85D197117FE26 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = Sources/Shared/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = de.superuser404.VLCBench;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = BACKEND_VLCKIT;
 			};
 			name = Release;
 		};
@@ -386,6 +538,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		0B9DC6C328C17148C2F94280 /* Build configuration list for PBXNativeTarget "AetherBench" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B02A8F0FDF68D6432FA8B862 /* Debug */,
+				3098A3E5360C830C30C971BA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		25120AB41BC355CA7CE162C4 /* Build configuration list for PBXProject "AetherBench" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -395,11 +556,20 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
-		903ACD89842C4BAACCE772D8 /* Build configuration list for PBXNativeTarget "BenchHarness" */ = {
+		4E8C97E0B9CDAA2E4C7BF6E9 /* Build configuration list for PBXNativeTarget "VLCBench" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				3A09C15273864363C21FD57F /* Debug */,
-				354014042C12FEA72FB5D4B0 /* Release */,
+				C4F7071FFC5697EAA44F7E05 /* Debug */,
+				E78B01A458A85D197117FE26 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8D6B6A27A6E2320658F68CB8 /* Build configuration list for PBXNativeTarget "AVBench" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DE52BD7A3DA622C105F16B5F /* Debug */,
+				C28578F1EFA64E908F08D870 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -432,31 +602,18 @@
 				revision = 73354ec8c6d20ca954b1874254b69fa19e2ffce5;
 			};
 		};
-		F2E30B6C5C37DDAA8F784D94 /* XCRemoteSwiftPackageReference "KSPlayer" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/kingslay/KSPlayer";
-			requirement = {
-				kind = exactVersion;
-				version = 2.3.4;
-			};
-		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		74C8F657AE3DF283D40F1547 /* AetherEngine */ = {
+		860117A5A96DB12D6293F2B2 /* AetherEngine */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = CB38DD9964A90A4ADA9BB598 /* XCRemoteSwiftPackageReference "AetherEngine" */;
 			productName = AetherEngine;
 		};
-		BEEE46398E9EF76B27E7240F /* VLCKit */ = {
+		D0631080D0E20E9C5B301BE4 /* VLCKitSPM */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 4360DA1D410BF382B0552FE4 /* XCRemoteSwiftPackageReference "vlckit-spm" */;
-			productName = VLCKit;
-		};
-		D2A0220399F53D09BE95FDB2 /* KSPlayer */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = F2E30B6C5C37DDAA8F784D94 /* XCRemoteSwiftPackageReference "KSPlayer" */;
-			productName = KSPlayer;
+			productName = VLCKitSPM;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

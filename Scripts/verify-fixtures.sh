@@ -35,5 +35,16 @@ check hevc-subs.mkv     s:0 stream=codec_name          subrip
 check hevc-subs.mkv     s:1 stream=codec_name          ass
 check eac3-51.mp4       a:0 stream=codec_name          eac3
 check eac3-51.mp4       a:0 stream=channels            6
-check dv-p81.mp4        v:0 stream=codec_tag_string    dvh1
+# Dolby Vision profile 8.1 is HDR10 backward compatible, so its sample entry is
+# `hvc1` plus a DOVI configuration box. `dvh1` / `dvhe` belong to profiles 5 and 7.
+# Assert the configuration record, which is what actually proves the RPU is there.
+dv=$(ffprobe -v error -select_streams v:0 -show_streams -of json dv-p81.mp4 2>/dev/null |
+  python3 -c '
+import json, sys
+s = json.load(sys.stdin)["streams"][0]
+d = next((x for x in s.get("side_data_list", []) if x.get("side_data_type") == "DOVI configuration record"), None)
+print("none" if d is None else "%s/%s/%s" % (d["dv_profile"], d["rpu_present_flag"], d["dv_bl_signal_compatibility_id"]))
+')
+if [ "$dv" = "8/1/1" ]; then echo "ok   dv-p81.mp4: DOVI profile 8.1, RPU present"
+else echo "FAIL dv-p81.mp4: DOVI record = '$dv', expected '8/1/1'"; fail=1; fi
 exit $fail
