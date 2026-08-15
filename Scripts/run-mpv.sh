@@ -122,22 +122,37 @@ if [ "$OSD_W" != "$WINDOW_W" ] || [ "$OSD_H" != "$WINDOW_H" ]; then
   exit 1
 fi
 
-# Settle first, exactly like BenchRunner: startedAt/endedAt must bound the
-# measured seconds only, never the settling ones.
-sleep "$SETTLE"
-STARTED=$(date -u +%s)
-
-# Static output metadata is stable once playback has settled; read it here,
-# at the same point BenchRunner snapshots the start-of-window counters.
+# Static output metadata is read once here, before the measurement window
+# opens, mirroring the Swift backends' `load()` populating `OutputInfo` once
+# up front rather than at settle-end. This is not just tidier: reading it
+# here means the STARTED..ENDED bracket below contains only the two counter
+# reads on both sides. Reading it after the settle sleep instead (as an
+# earlier version of this script did) meant six IPC round trips landed
+# between STARTED and the PT_START/DROPS_START snapshot while ENDED was
+# followed immediately by PT_END/DROPS_END with none, an asymmetry measured
+# at roughly 195ms vs 77ms that quietly biased deliveredFrames down by a
+# few frames over a 15s window, a distortion none of the four in-process
+# backends have since they read their counters as instant in-process calls.
 WIDTH=$(ask width); require "$WIDTH" width
 HEIGHT=$(ask height); require "$HEIGHT" height
 FPS=$(ask container-fps); require "$FPS" container-fps
+HWDEC_CURRENT=$(ask hwdec-current); require "$HWDEC_CURRENT" hwdec-current
 PIXFMT=$(ask "video-params/pixelformat"); require "$PIXFMT" "video-params/pixelformat"
+# Legitimately absent on the software path (no require): only populated once
+# a hardware decoder has put the frame in an opaque hardware-surface format.
+# See the bit-depth comment in the Python block below for why this matters.
+HW_PIXFMT=$(ask "video-params/hw-pixelformat")
 GAMMA=$(ask "video-params/gamma"); require "$GAMMA" "video-params/gamma"
 # Audio channel count is the one property allowed to legitimately come back
 # unavailable: a video with no audio track is a real state, not an IPC
 # failure, and AVPlayerBackend reports 0 for the same case.
 CHANNELS=$(ask "audio-params/channel-count"); CHANNELS="${CHANNELS:-0}"
+VERSION=$(mpv --version | head -1)
+
+# Settle first, exactly like BenchRunner: startedAt/endedAt must bound the
+# measured seconds only, never the settling ones.
+sleep "$SETTLE"
+STARTED=$(date -u +%s)
 
 # mpv exposes no presented-frame counter (checked --list-properties: no
 # vo-passed-frame-count or equivalent exists in 0.41.0; estimated-frame-number
@@ -159,16 +174,14 @@ ENDED=$(date -u +%s)
 PT_END=$(ask playback-time); require "$PT_END" playback-time
 DROPS_END=$(ask frame-drop-count); require "$DROPS_END" frame-drop-count
 
-VERSION=$(mpv --version | head -1)
-
-python3 - "$REPORT" "$WIDTH" "$HEIGHT" "$FPS" "$PIXFMT" "$GAMMA" "$CHANNELS" \
-         "$PT_START" "$DROPS_START" "$PT_END" "$DROPS_END" "$MEASURE" \
+python3 - "$REPORT" "$WIDTH" "$HEIGHT" "$FPS" "$HWDEC_CURRENT" "$PIXFMT" "$HW_PIXFMT" \
+         "$GAMMA" "$CHANNELS" "$PT_START" "$DROPS_START" "$PT_END" "$DROPS_END" "$MEASURE" \
          "$STARTED" "$ENDED" "$(basename "$URL")" "$VERSION" <<'PY'
 import json, re, sys, time
 
-(report, w, h, fps, pixfmt, gamma, channels,
+(report, w, h, fps, hwdec_current, pixfmt, hw_pixfmt, gamma, channels,
  pt_start, drops_start, pt_end, drops_end, measure,
- started, ended, fixture, version) = sys.argv[1:17]
+ started, ended, fixture, version) = sys.argv[1:19]
 
 fps = float(fps)
 measure = float(measure)
@@ -186,13 +199,37 @@ delivered = max(0, delivered_at(pt_end, drops_end) - delivered_at(pt_start, drop
 dropped = max(0, drops_end - drops_start)
 expected = int(measure * fps)
 
-# FFmpeg pixel-format naming: an explicit bit-depth digit run follows the
-# "p" only for >8-bit formats (yuv420p10le, yuv444p16le); its absence means
-# 8-bit (yuv420p, nv12). Informational only, like AVPlayerBackend's and
-# AetherBackend's colorTransfer/bitDepth: not meant to be compared byte for
-# byte against another backend's vocabulary for the same field.
-m = re.search(r'p(\d+)(?:le|be)?$', pixfmt)
-bit_depth = int(m.group(1)) if m else 8
+# Bit depth. Under hardware decode (--hwdec=auto-safe), mpv leaves the frame
+# in an opaque hardware-surface object and `video-params/pixelformat` reports
+# the hwdec API's own name ("videotoolbox" on macOS), not an FFmpeg pixel
+# format; the real underlying surface format lives one property over, in
+# `video-params/hw-pixelformat` (e.g. "p010" for 10-bit HDR10/DV content,
+# "nv12" for 8-bit). Verified live: hevc-4k-hdr10.mp4 and dv-p81.mp4 both
+# report pixelformat=videotoolbox while hw-pixelformat correctly says p010;
+# parsing pixelformat alone in that case silently produced bitDepth=8 for
+# genuinely 10-bit sources, a false cross-engine difference at the validity
+# gate (AetherEngine reports 10 for the same fixtures). hw-pixelformat is
+# only populated once hardware decode actually put a frame on a surface, so
+# it is preferred whenever it resolved; on the software path (no hardware
+# decode, hw-pixelformat legitimately never resolves) pixelformat itself is
+# already the real FFmpeg name and is used directly.
+#
+# FFmpeg pixel-format naming puts an explicit bit-depth digit run after the
+# "p" only for >8-bit formats (yuv420p10le, p010, yuv444p16le); its absence
+# means 8-bit (yuv420p, nv12), a real determination, not a guess. If neither
+# property ever yielded more than the opaque hwdec-API name (the value to
+# parse still equals hwdec-current itself), there is nothing real to parse:
+# report the cross-backend "not reported" sentinel (0, the same one
+# VLCKitBackend uses for its own unreported bitDepth) instead of defaulting
+# to 8. Whichever value is used, it stays informational only, like
+# AVPlayerBackend's and AetherBackend's colorTransfer/bitDepth: not meant to
+# be compared byte for byte against another backend's vocabulary.
+effective_pixfmt = hw_pixfmt if hw_pixfmt else pixfmt
+if effective_pixfmt == hwdec_current:
+    bit_depth = 0
+else:
+    m = re.search(r'p(\d+)(?:le|be)?$', effective_pixfmt)
+    bit_depth = int(m.group(1)) if m else 8
 
 stamp = lambda secs: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(int(secs)))
 
