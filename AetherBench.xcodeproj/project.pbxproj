@@ -19,6 +19,7 @@
 		1EA9051311FCF449415FE100 /* BenchArguments.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CAA105AA118C8B8928E5A4 /* BenchArguments.swift */; };
 		1FF61BF550BD2213EA80EFA0 /* AetherBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01EC7F4D6CCE785DA4637BBA /* AetherBackend.swift */; };
 		232243E6F837050980B50C23 /* BackendFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03AC06AB3B9295795DF1AA8E /* BackendFactory.swift */; };
+		2EB61026F5E5147A2B061961 /* AetherBackendTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDF3D3FCA8938D44559A0074 /* AetherBackendTests.swift */; };
 		33E3797F81BB39FD2A715E21 /* BenchReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3383D8D5A4DB82104534436D /* BenchReport.swift */; };
 		34F7950E02E77B474A631D87 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1C4DB1FEC7C68EDEFDD27 /* main.swift */; };
 		36C5C84B4DED474DEC1C09AE /* BackendFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03AC06AB3B9295795DF1AA8E /* BackendFactory.swift */; };
@@ -80,6 +81,7 @@
 		C6112D57FA7A689A54291B33 /* AVBench */ = {isa = PBXFileReference; includeInIndex = 0; path = AVBench; sourceTree = BUILT_PRODUCTS_DIR; };
 		D103E6CBC42AF0C4090E92E1 /* BenchArgumentsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BenchArgumentsTests.swift; sourceTree = "<group>"; };
 		DCC1AAB7E0DBFFF9C9914D32 /* BenchWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BenchWindow.swift; sourceTree = "<group>"; };
+		DDF3D3FCA8938D44559A0074 /* AetherBackendTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AetherBackendTests.swift; sourceTree = "<group>"; };
 		E4A84D4E1CD324E00F8E6010 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		E4CE92192C20DF62D27EFF43 /* VLCKitBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VLCKitBackend.swift; sourceTree = "<group>"; };
 		E9CAA105AA118C8B8928E5A4 /* BenchArguments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BenchArguments.swift; sourceTree = "<group>"; };
@@ -146,6 +148,7 @@
 			isa = PBXGroup;
 			children = (
 				21CA0390DADF53830CC00308 /* .gitkeep */,
+				DDF3D3FCA8938D44559A0074 /* AetherBackendTests.swift */,
 			);
 			path = AetherBenchTests;
 			sourceTree = "<group>";
@@ -449,6 +452,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				FD6F7C9DD6778F40EE9B118A /* AetherBackend.swift in Sources */,
+				2EB61026F5E5147A2B061961 /* AetherBackendTests.swift in Sources */,
 				4CB99C4F81AC7E18A6F51C19 /* BackendFactory.swift in Sources */,
 				E3C7F3BCB49548907B16741F /* BenchArguments.swift in Sources */,
 				FA11C17A784593A24EDA14FE /* BenchBackend.swift in Sources */,
