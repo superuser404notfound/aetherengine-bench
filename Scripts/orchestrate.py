@@ -676,6 +676,13 @@ def run_session(cfg, fixtures, backends, output_dir, dry_run=False, report_dir=p
 
     machine = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"],
                               capture_output=True, text=True).stdout.strip().replace(" ", "-")
+    # machdep.cpu.brand_string ("Apple M1") names the SoC, not the chassis:
+    # a MacBook Air and a MacBook Pro can share a chip but not a thermal
+    # design, and the fanless Air is why this protocol has cooldowns and a
+    # throttling discard rule at all. hw.model ("MacBookAir10,1") is the
+    # one field that actually identifies the physical machine.
+    machine_model = subprocess.run(["sysctl", "-n", "hw.model"],
+                                    capture_output=True, text=True).stdout.strip()
     versions = engine_versions()
     date = time.strftime("%Y-%m-%d")
     os_version = subprocess.run(["sw_vers", "-productVersion"], capture_output=True, text=True).stdout.strip()
@@ -689,8 +696,9 @@ def run_session(cfg, fixtures, backends, output_dir, dry_run=False, report_dir=p
     # either and re-calling write_results(out, payload) always serializes
     # the latest state; nothing here needs to be reassembled per write.
     payload = {
-        "machine": machine, "date": date, "versions": versions, "os": os_version,
-        "protocol": dataclasses.asdict(cfg), "launchFailures": launch_failures, "runs": records,
+        "machine": machine, "machineModel": machine_model, "date": date, "versions": versions,
+        "os": os_version, "protocol": dataclasses.asdict(cfg),
+        "launchFailures": launch_failures, "runs": records,
     }
     if dry_run:
         payload["dryRun"] = True

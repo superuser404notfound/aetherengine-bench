@@ -223,6 +223,21 @@ class ThermalAndLaunchFailureTests(unittest.TestCase):
                           [("KSPlayer", 15)])
         self.assertEqual(render_table._fixture_launch_failures(raw, "h264-1080p.mp4"), [])
 
+    def test_old_flat_launch_failures_shape_does_not_crash(self):
+        # Pre-fix results files stored launchFailures as a flat
+        # {backend: int} session-wide count, not {backend: {fixture:
+        # int}}. Reproduces the reviewer's exact repro: a plain int value
+        # must not raise AttributeError on int.get(), and since there is
+        # no trustworthy per-fixture count to read out of an old-shape
+        # file, it must not be fabricated as this fixture's own either.
+        old_shape = {"vlckit": 2, "ksplayer": 0}
+        self.assertEqual(render_table._fixture_launch_failures(old_shape, "hevc-4k-hdr10.mp4"), [])
+        # render() end to end against the same old-shape data: reaching
+        # this assertion at all is the proof it did not raise.
+        sample = {**SAMPLE, "launchFailures": old_shape}
+        out = render_table.render(sample)
+        self.assertIn("| **AetherEngine** |", out)
+
     def test_launch_failures_follow_the_tables_own_backend_order(self):
         # The fixture's raw launchFailures dict lists vlckit before ksplayer
         # (orchestrate.py's internal BACKENDS order); the rendered line must
@@ -250,10 +265,14 @@ class ThermalAndLaunchFailureTests(unittest.TestCase):
 
 
 class MachineHeaderTests(unittest.TestCase):
-    """The header names results["machine"] verbatim. It must not also carry
+    """The header names results["machine"] verbatim, and must not also carry
     a hardcoded chassis/thermal-design claim ("MacBook Air, fanless") that
-    nothing in the schema backs and that would silently keep printing on a
-    results file from different hardware.
+    nothing in the schema backs. The fanless fact is methodologically real
+    (it is why the protocol has cooldowns and a throttling discard rule)
+    and still needs a home, so it is backed by results["machineModel"]
+    (sysctl hw.model, e.g. "MacBookAir10,1") instead: printed only when
+    that field is present, so the claim is always checkable against real
+    data, never a leftover literal on a results file from other hardware.
     """
 
     def test_header_names_whatever_machine_the_results_file_says(self):
@@ -262,9 +281,22 @@ class MachineHeaderTests(unittest.TestCase):
         self.assertIn("Measured on Apple-M2-Pro,", out)
 
     def test_header_does_not_hardcode_a_chassis_claim(self):
+        # SAMPLE carries no machineModel, so nothing about chassis or
+        # thermal design may appear: there is no field to back it with.
         out = render_table.render(SAMPLE)
         self.assertNotIn("MacBook Air", out)
         self.assertNotIn("fanless", out)
+
+    def test_header_includes_the_machine_model_when_present(self):
+        sample = {**SAMPLE, "machineModel": "MacBookAir10,1"}
+        out = render_table.render(sample)
+        self.assertIn("Measured on Apple-M1 (MacBookAir10,1),", out)
+
+    def test_fanless_note_is_backed_by_the_model_identifier_when_present(self):
+        sample = {**SAMPLE, "machineModel": "MacBookAir10,1"}
+        out = render_table.render(sample)
+        self.assertIn("MacBookAir10,1 is fanless", out)
+        self.assertIn("cooldowns", out)
 
 
 class MpvMethodNoteTests(unittest.TestCase):

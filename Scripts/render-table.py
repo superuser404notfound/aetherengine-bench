@@ -26,6 +26,10 @@ pretty:
   the fixture being rendered (orchestrate.py counts them per (backend,
   fixture)), never as one session-wide total sitting under every fixture's
   table, which would re-bill every fixture an engine did not fail on.
+- The machine is named from results["machine"]/["machineModel"], not a
+  hardcoded literal. The "fanless" claim (why the protocol has cooldowns
+  and a throttling discard rule) only prints alongside a model identifier
+  a reader can check, never as an unbacked assertion.
 """
 import json
 import statistics
@@ -178,10 +182,24 @@ def _fixture_launch_failures(raw_launch_failures, fixture):
     orchestrate.py; scoping here (not a session-wide sum) is what stops one
     engine's failures on a fixture it cannot play at all from being re-billed
     under every other fixture's clean table.
+
+    Guards against the pre-fix flat {backend: int} shape (a session-wide
+    count, from before launch failures were keyed per fixture): a non-dict
+    value means this results file predates that keying, so there is no
+    trustworthy per-fixture count to read out of it. Treated as "no data
+    for this fixture" rather than crashing on int.get(), and rather than
+    fabricating an unscoped number next to a table that claims to be
+    scoped to one fixture, which is the exact confusion the keying fix
+    exists to prevent.
     """
-    counts = [(name, (raw_launch_failures.get(b) or {}).get(fixture, 0))
-              for b, name in NAMES.items()]
-    return [(name, n) for name, n in counts if n]
+    counts = []
+    for b, name in NAMES.items():
+        value = raw_launch_failures.get(b)
+        if isinstance(value, dict):
+            n = value.get(fixture, 0)
+            if n:
+                counts.append((name, n))
+    return counts
 
 
 def _one_or_varies(values, empty_text, varies_label):
@@ -234,6 +252,12 @@ def render(results, fixture="hevc-4k-hdr10.mp4"):
         measure_s = 60
     repeats = protocol.get("repeats") or _infer_repeats(table, fixture) or 3
     machine = results.get("machine", "unknown machine")
+    # machdep.cpu.brand_string names the SoC, not the chassis: a MacBook Air
+    # and a MacBook Pro can share a chip but not a thermal design.
+    # machineModel (sysctl hw.model, e.g. "MacBookAir10,1") identifies the
+    # actual machine, when the results file carries it.
+    machine_model = results.get("machineModel")
+    machine_desc = f"{machine} ({machine_model})" if machine_model else machine
     os_version = results.get("os", "unknown OS")
 
     lines = []
@@ -245,9 +269,22 @@ def render(results, fixture="hevc-4k-hdr10.mp4"):
         note = results.get("note") or "shortened validation timings, not published data"
         lines += [f"**DRY RUN: {note}.**", ""]
 
+    lines.append(
+        f"Measured on {machine_desc}, macOS {os_version}, "
+        f"{fixture}, windowed 1920x1080, {measure_s:.0f} s, median of {repeats}.")
+    if machine_model:
+        # "Fanless" only prints when there is a model identifier a reader
+        # can check it against: an unbacked chassis/thermal-design claim
+        # is exactly what the previous fix round removed from this header.
+        # It also explains why the protocol has cooldowns and a throttling
+        # discard rule, so it belongs next to the numbers, not buried in
+        # the generic caveat list at the bottom.
+        lines.append(
+            f"{machine_model} is fanless: sustained decode can reach thermal pressure on this "
+            "rig, which is why the protocol includes cooldowns between runs and discards any "
+            "window recorded while the SoC reported throttling.")
+
     lines += [
-        f"Measured on {machine}, macOS {os_version}, "
-        f"{fixture}, windowed 1920x1080, {measure_s:.0f} s, median of {repeats}.",
         "",
         "| | CPU power | GPU power | CPU load | on E-cores | RSS | peak RSS |",
         "| --- | --- | --- | --- | --- | --- | --- |",
