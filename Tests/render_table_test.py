@@ -205,6 +205,16 @@ class DryRunTests(unittest.TestCase):
         out = render_table.render(SAMPLE)
         self.assertNotIn("DRY RUN", out)
 
+    def test_a_note_that_already_says_not_published_data_is_not_doubled(self):
+        # orchestrate.py's own note field already ends in "not published
+        # data" (both run_session's real note and the harness-validation
+        # one used during task 9's own dry run write it that way); the
+        # renderer must not append the phrase a second time.
+        sample = {**SAMPLE, "dryRun": True,
+                  "note": "shortened validation run (see --settle/--measure), not published data"}
+        out = render_table.render(sample)
+        self.assertNotIn("not published data, not published data", out)
+
 
 if __name__ == "__main__":
     unittest.main()

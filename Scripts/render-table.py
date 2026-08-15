@@ -195,8 +195,12 @@ def render(results, fixture="hevc-4k-hdr10.mp4"):
 
     lines = []
     if results.get("dryRun"):
-        note = results.get("note", "shortened validation timings")
-        lines += [f"**DRY RUN: {note}, not published data.**", ""]
+        # orchestrate.py's own note field already ends in "not published
+        # data" by convention (run_session/the harness-validation note
+        # both write it that way); appending the same phrase again here
+        # would read as "..., not published data, not published data.".
+        note = results.get("note") or "shortened validation timings, not published data"
+        lines += [f"**DRY RUN: {note}.**", ""]
 
     lines += [
         f"Measured on {machine} (MacBook Air, fanless), macOS {os_version}, "
