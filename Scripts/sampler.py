@@ -18,12 +18,31 @@ import time
 
 POWERMETRICS_BLOCK_HEADER = "*** Sampled system activity"
 
+# Canonical order, least to most severe, per `man powermetrics` / observed
+# `**** Thermal pressure ****` output. Anything outside this set is treated
+# as unrecognized rather than silently ranked, see _thermal_severity.
+_THERMAL_LEVELS = ["Nominal", "Moderate", "Heavy", "Trapping", "Sleeping"]
+
 # ps formats %cpu using the process locale's decimal separator (this machine
 # runs de_DE.UTF-8, where ps prints "0,0" for zero percent, which float()
 # rejects). Force the C locale on every subprocess call here so a comma
 # decimal separator can never masquerade as a parse failure, or worse, get
 # silently truncated by a permissive parser into the wrong number.
 _C_LOCALE_ENV = dict(os.environ, LC_ALL="C", LC_NUMERIC="C")
+
+
+def _thermal_severity(level):
+    """Index into _THERMAL_LEVELS, or raise if powermetrics reported a word
+    we don't recognize. Ranking an unknown level would either silently
+    treat it as mild (if it sorts low) or drop a real excursion (if it
+    sorts high); neither is acceptable, so an unrecognized level is loud."""
+    try:
+        return _THERMAL_LEVELS.index(level)
+    except ValueError:
+        raise ValueError(
+            f"parse_powermetrics: unrecognized thermal pressure level {level!r}, "
+            f"expected one of {_THERMAL_LEVELS}"
+        )
 
 
 def parse_powermetrics(text):
@@ -35,6 +54,17 @@ def parse_powermetrics(text):
     that raises. GPU/ANE power and the two cluster residencies come back as
     None (never 0.0) when the block genuinely does not mention them, so a
     caller can tell "not reported" from "reported as zero".
+
+    powermetrics never emits the literal word "throttled" in any sampler;
+    the real signal is the `thermal` sampler's "Current pressure level:"
+    line. thermalPressure is that raw level string, or None if this block
+    has no thermal reading at all (e.g. the thermal sampler was not
+    requested). throttled is derived as "a level was reported and it is not
+    Nominal": it is False both when the machine is cool AND when we simply
+    have no thermal data, so a caller that only checks throttled can be
+    fooled into treating "unknown" as "cool". thermalPressure is what makes
+    that distinction visible; check it, not just throttled, before trusting
+    a run as thermally clean.
     """
 
     def find(pattern):
@@ -48,13 +78,19 @@ def parse_powermetrics(text):
             "malformed or truncated powermetrics output"
         )
 
+    thermal_match = re.search(r"Current pressure level:\s*(\w+)", text)
+    thermal_pressure = thermal_match.group(1) if thermal_match else None
+    if thermal_pressure is not None:
+        _thermal_severity(thermal_pressure)  # raises on an unrecognized level
+
     return {
         "cpuPowerMw": cpu_power,
         "gpuPowerMw": find(r"GPU Power:\s*([\d.]+)\s*mW"),
         "anePowerMw": find(r"ANE Power:\s*([\d.]+)\s*mW"),
         "eClusterResidency": find(r"E-Cluster HW active residency:\s*([\d.]+)%"),
         "pClusterResidency": find(r"P-Cluster HW active residency:\s*([\d.]+)%"),
-        "throttled": "throttled" in text.lower(),
+        "thermalPressure": thermal_pressure,
+        "throttled": thermal_pressure is not None and thermal_pressure != "Nominal",
     }
 
 
@@ -63,6 +99,17 @@ def _mean_or_none(values):
     if not present:
         return None
     return sum(present) / len(present)
+
+
+def _worst_thermal_pressure(levels):
+    """Worst (most severe) level across a window, or None if none of the
+    blocks carried a thermal reading at all. A run that dips out of Nominal
+    even briefly must stay identifiable in the aggregate, so this is a max
+    by severity, not a mean or a last-value."""
+    present = [l for l in levels if l is not None]
+    if not present:
+        return None
+    return max(present, key=_thermal_severity)
 
 
 def _aggregate_power_output(raw_output):
@@ -78,20 +125,23 @@ def _aggregate_power_output(raw_output):
             "to /usr/bin/powermetrics"
         )
     blocks = [parse_powermetrics(b) for b in blocks_text]
+    worst_pressure = _worst_thermal_pressure([b["thermalPressure"] for b in blocks])
     return {
         "cpuPowerMw": _mean_or_none([b["cpuPowerMw"] for b in blocks]),
         "gpuPowerMw": _mean_or_none([b["gpuPowerMw"] for b in blocks]),
         "anePowerMw": _mean_or_none([b["anePowerMw"] for b in blocks]),
         "eClusterResidency": _mean_or_none([b["eClusterResidency"] for b in blocks]),
         "pClusterResidency": _mean_or_none([b["pClusterResidency"] for b in blocks]),
-        "throttled": any(b["throttled"] for b in blocks),
+        "thermalPressure": worst_pressure,
+        "throttled": worst_pressure is not None and worst_pressure != "Nominal",
         "samples": len(blocks),
     }
 
 
 def sample_power(seconds, interval_ms=1000):
-    """Run `sudo powermetrics --samplers cpu_power` for approximately
-    `seconds` and return the averaged package power / cluster residency.
+    """Run `sudo powermetrics --samplers cpu_power,thermal` for
+    approximately `seconds` and return the averaged package power / cluster
+    residency, plus the worst thermal pressure level seen.
 
     This is system-wide, not per process: subtract an idle baseline
     captured on the same quiet machine before attributing it to a player.
@@ -101,12 +151,26 @@ def sample_power(seconds, interval_ms=1000):
     /usr/bin/powermetrics binary. stdin is closed so a missing or
     misconfigured grant fails immediately with sudo's own error instead of
     hanging on a password prompt that will never arrive in an unattended
-    run; nothing here works around that gate.
+    run; nothing here works around that gate. `timeout` bounds the call so a
+    hung powermetrics cannot stall an unattended multi-hour session
+    indefinitely; the deadline is seconds + 30 to leave headroom for
+    process startup and its own final flush.
     """
     if seconds <= 0:
         raise ValueError(f"sample_power: seconds must be positive, got {seconds}")
-    if interval_ms <= 0:
+    try:
+        interval_ms_int = int(interval_ms)
+    except (TypeError, ValueError) as e:
+        raise ValueError(
+            f"sample_power: interval_ms must be an integer number of milliseconds, got {interval_ms!r}"
+        ) from e
+    if interval_ms_int != interval_ms:
+        raise ValueError(
+            f"sample_power: interval_ms must be a whole number of milliseconds, got {interval_ms!r}"
+        )
+    if interval_ms_int <= 0:
         raise ValueError(f"sample_power: interval_ms must be positive, got {interval_ms}")
+    interval_ms = interval_ms_int
 
     n = int(seconds * 1000 / interval_ms)
     if n < 1:
@@ -115,13 +179,19 @@ def sample_power(seconds, interval_ms=1000):
             "would request fewer than one powermetrics sample"
         )
 
-    result = subprocess.run(
-        ["sudo", "powermetrics", "--samplers", "cpu_power", "-i", str(interval_ms), "-n", str(n)],
-        capture_output=True,
-        text=True,
-        stdin=subprocess.DEVNULL,
-        env=_C_LOCALE_ENV,
-    )
+    try:
+        result = subprocess.run(
+            ["sudo", "powermetrics", "--samplers", "cpu_power,thermal", "-i", str(interval_ms), "-n", str(n)],
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+            env=_C_LOCALE_ENV,
+            timeout=seconds + 30,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(
+            f"sample_power: `sudo powermetrics` did not finish within {seconds + 30}s (hung?)"
+        ) from e
     if result.returncode != 0:
         raise RuntimeError(
             "sample_power: `sudo powermetrics` exited "
@@ -160,13 +230,17 @@ def _read_ps(pid):
     measurement instead of what it actually is, the process has already
     exited. A zombie row raises immediately rather than being averaged in.
     """
-    result = subprocess.run(
-        ["ps", "-o", "%cpu=,rss=,state=", "-p", str(pid)],
-        capture_output=True,
-        text=True,
-        stdin=subprocess.DEVNULL,
-        env=_C_LOCALE_ENV,
-    )
+    try:
+        result = subprocess.run(
+            ["ps", "-o", "%cpu=,rss=,state=", "-p", str(pid)],
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+            env=_C_LOCALE_ENV,
+            timeout=10,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(f"sample_process: `ps` did not respond within 10s for pid {pid} (hung?)") from e
     out = result.stdout.strip()
     if result.returncode != 0 or not out:
         return None
@@ -217,6 +291,12 @@ def sample_process(pid, seconds, interval=1.0):
         raise ValueError(f"sample_process: seconds must be positive, got {seconds}")
     if interval <= 0:
         raise ValueError(f"sample_process: interval must be positive, got {interval}")
+    if interval > seconds:
+        raise ValueError(
+            f"sample_process: interval ({interval}s) must not exceed seconds "
+            f"({seconds}s), or the sampling window would silently overshoot "
+            "what the caller asked for"
+        )
     try:
         pid = int(pid)
     except (TypeError, ValueError) as e:

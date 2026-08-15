@@ -18,10 +18,16 @@ sys.path.insert(0, os.path.join(THIS_DIR, "..", "Scripts"))
 import sampler  # noqa: E402
 
 FIXTURE_PATH = os.path.join(THIS_DIR, "Fixtures", "powermetrics_sample.txt")
+THERMAL_FIXTURE_PATH = os.path.join(THIS_DIR, "Fixtures", "powermetrics_thermal_sample.txt")
 
 
 def load_fixture():
     with open(FIXTURE_PATH) as f:
+        return f.read()
+
+
+def load_thermal_fixture():
+    with open(THERMAL_FIXTURE_PATH) as f:
         return f.read()
 
 
@@ -40,9 +46,36 @@ P-Cluster HW active residency: 18.02%
         self.assertAlmostEqual(parsed["eClusterResidency"], 42.31)
         self.assertFalse(parsed["throttled"])
 
-    def test_detects_throttling(self):
-        parsed = sampler.parse_powermetrics("CPU Power: 900 mW\npackage idle exit: throttled\n")
+    def test_nominal_thermal_pressure_is_not_throttled(self):
+        parsed = sampler.parse_powermetrics(
+            "CPU Power: 900 mW\n**** Thermal pressure ****\nCurrent pressure level: Nominal\n"
+        )
+        self.assertEqual(parsed["thermalPressure"], "Nominal")
+        self.assertFalse(parsed["throttled"])
+
+    def test_non_nominal_thermal_pressure_is_throttled(self):
+        # powermetrics never emits the literal word "throttled" in any
+        # sampler (verified against the real binary); the actual signal is
+        # the thermal sampler's "Current pressure level:" line.
+        parsed = sampler.parse_powermetrics(
+            "CPU Power: 900 mW\n**** Thermal pressure ****\nCurrent pressure level: Heavy\n"
+        )
+        self.assertEqual(parsed["thermalPressure"], "Heavy")
         self.assertTrue(parsed["throttled"])
+
+    def test_no_thermal_line_is_none_not_false(self):
+        # No "Current pressure level:" line at all (e.g. the thermal sampler
+        # was not requested). This must not read as "cool": thermalPressure
+        # is None so a caller can tell "we don't know" from "measured cool".
+        parsed = sampler.parse_powermetrics("CPU Power: 900 mW\n")
+        self.assertIsNone(parsed["thermalPressure"])
+        self.assertFalse(parsed["throttled"])
+
+    def test_unrecognized_thermal_level_raises(self):
+        with self.assertRaises(ValueError):
+            sampler.parse_powermetrics(
+                "CPU Power: 900 mW\nCurrent pressure level: Melting\n"
+            )
 
     def test_missing_cpu_power_raises_not_zero(self):
         # No "CPU Power" line at all: this is malformed/truncated powermetrics
@@ -67,7 +100,10 @@ P-Cluster HW active residency: 18.02%
         # (M1). Each block carries the per-frequency parenthesised breakdown
         # after the residency percentage (e.g. "23.02% (600 MHz: 13% ...)"),
         # and dozens of per-CPU lines the parser must not confuse with the
-        # cluster-level lines it actually wants.
+        # cluster-level lines it actually wants. This capture did not request
+        # the thermal sampler, so it doubles as the recorded-output case for
+        # "a block with no thermal line at all": thermalPressure must be
+        # None here, not silently False-flavored.
         raw = load_fixture()
         blocks_text = [
             b for b in raw.split(sampler.POWERMETRICS_BLOCK_HEADER) if "CPU Power" in b
@@ -79,6 +115,20 @@ P-Cluster HW active residency: 18.02%
         self.assertEqual([p["anePowerMw"] for p in parsed], [0.0, 0.0, 0.0])
         self.assertAlmostEqual(parsed[0]["eClusterResidency"], 23.02)
         self.assertAlmostEqual(parsed[1]["pClusterResidency"], 90.11)
+        self.assertTrue(all(p["thermalPressure"] is None for p in parsed))
+        self.assertFalse(any(p["throttled"] for p in parsed))
+
+    def test_parses_recorded_thermal_sample(self):
+        # Real `sudo powermetrics --samplers cpu_power,thermal -i 1000 -n 3`
+        # capture from this machine (Tests/Fixtures/powermetrics_thermal_sample.txt),
+        # taken quiet/idle, all three blocks report Nominal.
+        raw = load_thermal_fixture()
+        blocks_text = [
+            b for b in raw.split(sampler.POWERMETRICS_BLOCK_HEADER) if "CPU Power" in b
+        ]
+        self.assertEqual(len(blocks_text), 3)
+        parsed = [sampler.parse_powermetrics(b) for b in blocks_text]
+        self.assertEqual([p["thermalPressure"] for p in parsed], ["Nominal", "Nominal", "Nominal"])
         self.assertFalse(any(p["throttled"] for p in parsed))
 
 
@@ -95,18 +145,43 @@ class AggregatePowerOutputTests(unittest.TestCase):
         self.assertAlmostEqual(result["cpuPowerMw"], (221.0 + 4980.0 + 124.0) / 3)
         self.assertAlmostEqual(result["gpuPowerMw"], (1.0 + 1.0 + 1.0) / 3)
         self.assertEqual(result["anePowerMw"], 0.0)
+        self.assertIsNone(result["thermalPressure"])
+        self.assertFalse(result["throttled"])
+
+    def test_aggregates_recorded_thermal_sample(self):
+        raw = load_thermal_fixture()
+        result = sampler._aggregate_power_output(raw)
+        self.assertEqual(result["samples"], 3)
+        self.assertEqual(result["thermalPressure"], "Nominal")
         self.assertFalse(result["throttled"])
 
     def test_no_parseable_blocks_raises(self):
         with self.assertRaises(RuntimeError):
             sampler._aggregate_power_output("nothing useful in here\n")
 
-    def test_throttled_true_if_any_block_reports_it(self):
+    def test_worst_of_thermal_pressure_wins_even_if_brief(self):
+        # A run that dips out of Nominal for one sample out of three must
+        # still be flagged: worst-of across the window, not last-value or
+        # majority-vote, and not "the machine mostly looked fine".
         raw = (
-            sampler.POWERMETRICS_BLOCK_HEADER + " (a)\nCPU Power: 900 mW\n"
-            + sampler.POWERMETRICS_BLOCK_HEADER + " (b)\nCPU Power: 950 mW\npackage idle exit: throttled\n"
+            sampler.POWERMETRICS_BLOCK_HEADER + " (a)\nCPU Power: 900 mW\nCurrent pressure level: Nominal\n"
+            + sampler.POWERMETRICS_BLOCK_HEADER + " (b)\nCPU Power: 4000 mW\nCurrent pressure level: Heavy\n"
+            + sampler.POWERMETRICS_BLOCK_HEADER + " (c)\nCPU Power: 950 mW\nCurrent pressure level: Nominal\n"
         )
         result = sampler._aggregate_power_output(raw)
+        self.assertEqual(result["thermalPressure"], "Heavy")
+        self.assertTrue(result["throttled"])
+
+    def test_worst_of_ignores_blocks_with_no_thermal_reading(self):
+        # One block has no thermal line at all (e.g. a dropped sample); the
+        # worst-of must be computed from the readings that exist, not
+        # dragged down (or up) by treating the missing one as Nominal.
+        raw = (
+            sampler.POWERMETRICS_BLOCK_HEADER + " (a)\nCPU Power: 900 mW\n"
+            + sampler.POWERMETRICS_BLOCK_HEADER + " (b)\nCPU Power: 950 mW\nCurrent pressure level: Moderate\n"
+        )
+        result = sampler._aggregate_power_output(raw)
+        self.assertEqual(result["thermalPressure"], "Moderate")
         self.assertTrue(result["throttled"])
 
     def test_optional_field_missing_from_every_block_is_none_not_zero(self):
@@ -124,11 +199,13 @@ class SamplePowerCommandTests(unittest.TestCase):
     mocked out. Confirms it shells out to `sudo powermetrics` (the binary
     the sudoers NOPASSWD grant is scoped to) with a closed stdin (so a
     missing grant fails fast instead of hanging on a password prompt that
-    will never come in an unattended run), and that a nonzero exit raises
-    with the real stderr surfaced rather than being swallowed."""
+    will never come in an unattended run), requests the thermal sampler
+    (without it, throttled could never be observed at all), bounds itself
+    with a timeout, and that a nonzero exit raises with the real stderr
+    surfaced rather than being swallowed."""
 
     def test_invokes_sudo_powermetrics_with_closed_stdin(self):
-        raw = load_fixture()
+        raw = load_thermal_fixture()
         with mock.patch.object(sampler.subprocess, "run") as run:
             run.return_value = subprocess.CompletedProcess(
                 args=["sudo", "powermetrics"], returncode=0, stdout=raw, stderr=""
@@ -137,10 +214,38 @@ class SamplePowerCommandTests(unittest.TestCase):
         args, kwargs = run.call_args
         cmd = args[0]
         self.assertEqual(cmd[0:2], ["sudo", "powermetrics"])
+        self.assertIn("--samplers", cmd)
+        self.assertEqual(cmd[cmd.index("--samplers") + 1], "cpu_power,thermal")
         self.assertIn("-n", cmd)
         self.assertEqual(cmd[cmd.index("-n") + 1], "3")
         self.assertEqual(kwargs.get("stdin"), subprocess.DEVNULL)
+        self.assertEqual(kwargs.get("timeout"), 33)
         self.assertEqual(result["samples"], 3)
+
+    def test_interval_ms_must_be_a_whole_number(self):
+        with mock.patch.object(sampler.subprocess, "run") as run:
+            with self.assertRaises(ValueError):
+                sampler.sample_power(3, interval_ms=333.7)
+            with self.assertRaises(ValueError):
+                sampler.sample_power(3, interval_ms="1000")
+        run.assert_not_called()
+
+    def test_interval_ms_as_integral_float_is_accepted(self):
+        raw = load_thermal_fixture()
+        with mock.patch.object(sampler.subprocess, "run") as run:
+            run.return_value = subprocess.CompletedProcess(
+                args=["sudo", "powermetrics"], returncode=0, stdout=raw, stderr=""
+            )
+            sampler.sample_power(3, interval_ms=1000.0)
+        args, _ = run.call_args
+        self.assertIn("1000", args[0])
+
+    def test_timeout_expired_raises_runtime_error(self):
+        with mock.patch.object(sampler.subprocess, "run") as run:
+            run.side_effect = subprocess.TimeoutExpired(cmd="sudo powermetrics", timeout=33)
+            with self.assertRaises(RuntimeError) as ctx:
+                sampler.sample_power(3)
+        self.assertIn("did not finish", str(ctx.exception))
 
     def test_nonzero_exit_raises_with_stderr_not_a_default_dict(self):
         with mock.patch.object(sampler.subprocess, "run") as run:
@@ -199,6 +304,26 @@ class ReadPsLocaleTests(unittest.TestCase):
         self.assertIsNotNone(env, "ps must run with an explicit env forcing a C locale")
         self.assertEqual(env.get("LC_ALL"), "C")
         self.assertEqual(env.get("LC_NUMERIC"), "C")
+
+
+class ReadPsTimeoutTests(unittest.TestCase):
+    """A hung `ps` must not block a four-hour unattended session forever."""
+
+    def test_ps_subprocess_has_a_timeout(self):
+        with mock.patch.object(sampler.subprocess, "run") as run:
+            run.return_value = subprocess.CompletedProcess(
+                args=["ps"], returncode=0, stdout="  0.0   2592 S\n", stderr=""
+            )
+            sampler._read_ps(os.getpid())
+        _, kwargs = run.call_args
+        self.assertEqual(kwargs.get("timeout"), 10)
+
+    def test_ps_timeout_expired_raises_runtime_error(self):
+        with mock.patch.object(sampler.subprocess, "run") as run:
+            run.side_effect = subprocess.TimeoutExpired(cmd="ps", timeout=10)
+            with self.assertRaises(RuntimeError) as ctx:
+                sampler._read_ps(os.getpid())
+        self.assertIn("did not respond", str(ctx.exception))
 
 
 class ReadPsZombieTests(unittest.TestCase):
@@ -261,6 +386,14 @@ class SampleProcessTests(unittest.TestCase):
     def test_non_positive_seconds_raises(self):
         with self.assertRaises(ValueError):
             sampler.sample_process(os.getpid(), 0)
+
+    def test_interval_exceeding_seconds_raises_instead_of_overshooting(self):
+        # interval=10 with seconds=1 would otherwise take one sample, sleep
+        # for the full 10s (well past the requested window), and only then
+        # notice the deadline had passed, silently measuring a ~10s window
+        # instead of the 1s the caller asked for.
+        with self.assertRaises(ValueError):
+            sampler.sample_process(os.getpid(), 1, interval=10)
 
 
 if __name__ == "__main__":
