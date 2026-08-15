@@ -10,29 +10,54 @@
 		03F0792670DC1819F2EBCFBE /* BenchArgumentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D103E6CBC42AF0C4090E92E1 /* BenchArgumentsTests.swift */; };
 		08E23763E283E52610D2229F /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1C4DB1FEC7C68EDEFDD27 /* main.swift */; };
 		0A101E37DF92734363616EFC /* VLCKitSPM in Frameworks */ = {isa = PBXBuildFile; productRef = D6C1BB455C6B5CC146A1DA07 /* VLCKitSPM */; };
+		0CE5E1927AB0092DF9E3EE92 /* BenchBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8172D8C2531C3D4F6F1539B5 /* BenchBackend.swift */; };
+		115FAE5A8BC04A91F0ED32A7 /* BenchRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED71B1A70C33612A5C6D9369 /* BenchRunner.swift */; };
 		157993BC07585EDF7A29DB12 /* AVPlayerBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4943A793DE0089C443CAF03 /* AVPlayerBackend.swift */; };
+		16889A511F1AC10C2695E956 /* BenchWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCC1AAB7E0DBFFF9C9914D32 /* BenchWindow.swift */; };
+		1D2353D1EE8580DCEBE2040C /* BenchWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCC1AAB7E0DBFFF9C9914D32 /* BenchWindow.swift */; };
 		1E97A2C683EAC8EA2F5529C9 /* BenchReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3383D8D5A4DB82104534436D /* BenchReport.swift */; };
 		1EA9051311FCF449415FE100 /* BenchArguments.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CAA105AA118C8B8928E5A4 /* BenchArguments.swift */; };
 		1FF61BF550BD2213EA80EFA0 /* AetherBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01EC7F4D6CCE785DA4637BBA /* AetherBackend.swift */; };
+		232243E6F837050980B50C23 /* BackendFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03AC06AB3B9295795DF1AA8E /* BackendFactory.swift */; };
 		33E3797F81BB39FD2A715E21 /* BenchReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3383D8D5A4DB82104534436D /* BenchReport.swift */; };
 		34F7950E02E77B474A631D87 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1C4DB1FEC7C68EDEFDD27 /* main.swift */; };
+		36C5C84B4DED474DEC1C09AE /* BackendFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03AC06AB3B9295795DF1AA8E /* BackendFactory.swift */; };
+		3872CB16E2B2F535A7EFDCB5 /* BenchBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8172D8C2531C3D4F6F1539B5 /* BenchBackend.swift */; };
+		426F1A49B145E43D21368366 /* BenchRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED71B1A70C33612A5C6D9369 /* BenchRunner.swift */; };
 		42E785CC969B279D3BA09DA4 /* VLCKitSPM in Frameworks */ = {isa = PBXBuildFile; productRef = D0631080D0E20E9C5B301BE4 /* VLCKitSPM */; };
+		4CB99C4F81AC7E18A6F51C19 /* BackendFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03AC06AB3B9295795DF1AA8E /* BackendFactory.swift */; };
 		50E07C477043BFB03E953476 /* BenchArguments.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CAA105AA118C8B8928E5A4 /* BenchArguments.swift */; };
+		63AF71D6CDAD7D2BB742D44E /* BackendFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03AC06AB3B9295795DF1AA8E /* BackendFactory.swift */; };
 		64162293DD5121DC26578C45 /* BenchArguments.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CAA105AA118C8B8928E5A4 /* BenchArguments.swift */; };
 		65F854F7931ECA6BCE785D4F /* BenchArguments.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CAA105AA118C8B8928E5A4 /* BenchArguments.swift */; };
+		675EFBA497670BF2E7B54C09 /* BackendFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03AC06AB3B9295795DF1AA8E /* BackendFactory.swift */; };
+		693E0AEE4FAEAF63744A503C /* BenchRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED71B1A70C33612A5C6D9369 /* BenchRunner.swift */; };
 		729A2109FB003DBD2DF8942C /* BenchArguments.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CAA105AA118C8B8928E5A4 /* BenchArguments.swift */; };
+		8AB774318AAF5E083F14A842 /* BenchWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCC1AAB7E0DBFFF9C9914D32 /* BenchWindow.swift */; };
 		8B11C39880052B4265AEADC4 /* BenchReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3383D8D5A4DB82104534436D /* BenchReport.swift */; };
+		9F3FE7E98B1F443C5394C541 /* BenchBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8172D8C2531C3D4F6F1539B5 /* BenchBackend.swift */; };
+		B042B2678D308381106A9D2F /* BenchBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8172D8C2531C3D4F6F1539B5 /* BenchBackend.swift */; };
 		B2D8D42E09D732620E1A21A8 /* VLCKitBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4CE92192C20DF62D27EFF43 /* VLCKitBackend.swift */; };
 		B2DDD0CC7A4C0FFB5C249963 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1C4DB1FEC7C68EDEFDD27 /* main.swift */; };
+		B743EF2CE0C570C332AA260F /* BenchRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED71B1A70C33612A5C6D9369 /* BenchRunner.swift */; };
+		B8AF0C6E6BB81FED48AF3216 /* BackendFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03AC06AB3B9295795DF1AA8E /* BackendFactory.swift */; };
+		BB400BB33A6A085B8175BF36 /* BenchWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCC1AAB7E0DBFFF9C9914D32 /* BenchWindow.swift */; };
 		BCF808A04BE1EB094438DA36 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1C4DB1FEC7C68EDEFDD27 /* main.swift */; };
 		C6FAB7B7A975961EB8303270 /* BenchReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3383D8D5A4DB82104534436D /* BenchReport.swift */; };
+		C779D8A0A4CC7B53203E2C2F /* BenchWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCC1AAB7E0DBFFF9C9914D32 /* BenchWindow.swift */; };
+		CA04E26FB249DE4BCD1A0E30 /* BenchBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8172D8C2531C3D4F6F1539B5 /* BenchBackend.swift */; };
+		CE6FA9DCC20185FE7E3ACB2E /* BenchRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED71B1A70C33612A5C6D9369 /* BenchRunner.swift */; };
+		CEB4F65041C84899B572C5D5 /* AVPlayerBackendTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A52126CF86487731C56CB072 /* AVPlayerBackendTests.swift */; };
 		D018D7B84093732111C98F64 /* BenchReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3383D8D5A4DB82104534436D /* BenchReport.swift */; };
 		D62B467B83B709E89FA941C8 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1C4DB1FEC7C68EDEFDD27 /* main.swift */; };
 		DBF67837DB79AD0334624968 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1C4DB1FEC7C68EDEFDD27 /* main.swift */; };
 		DDDBAE9C5CD82A007F3E0B9A /* AetherEngine in Frameworks */ = {isa = PBXBuildFile; productRef = 860117A5A96DB12D6293F2B2 /* AetherEngine */; };
+		E087B139A707A958390DFCD3 /* BenchRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED71B1A70C33612A5C6D9369 /* BenchRunner.swift */; };
 		E3C7F3BCB49548907B16741F /* BenchArguments.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CAA105AA118C8B8928E5A4 /* BenchArguments.swift */; };
 		E9D9EEDE41CC0DBAEACC3F51 /* AetherEngine in Frameworks */ = {isa = PBXBuildFile; productRef = A7F563DFE1A29100755DB79B /* AetherEngine */; };
+		EE518B351F8E62CB6F4D2F5F /* BenchWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCC1AAB7E0DBFFF9C9914D32 /* BenchWindow.swift */; };
 		F947168733B8520676B4FD20 /* AVPlayerBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4943A793DE0089C443CAF03 /* AVPlayerBackend.swift */; };
+		FA11C17A784593A24EDA14FE /* BenchBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8172D8C2531C3D4F6F1539B5 /* BenchBackend.swift */; };
 		FC431FC04EE8E84738897514 /* VLCKitBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4CE92192C20DF62D27EFF43 /* VLCKitBackend.swift */; };
 		FD6F7C9DD6778F40EE9B118A /* AetherBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01EC7F4D6CCE785DA4637BBA /* AetherBackend.swift */; };
 		FD9D86651563C56C3295CDD1 /* BenchReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3383D8D5A4DB82104534436D /* BenchReport.swift */; };
@@ -40,20 +65,25 @@
 
 /* Begin PBXFileReference section */
 		01EC7F4D6CCE785DA4637BBA /* AetherBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AetherBackend.swift; sourceTree = "<group>"; };
+		03AC06AB3B9295795DF1AA8E /* BackendFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendFactory.swift; sourceTree = "<group>"; };
 		05B1C4DB1FEC7C68EDEFDD27 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		21CA0390DADF53830CC00308 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		3383D8D5A4DB82104534436D /* BenchReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BenchReport.swift; sourceTree = "<group>"; };
 		597B03D72BE6F706C3F002E9 /* AetherBenchTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AetherBenchTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		608BF886440FD66058DA3BBC /* VLCBenchTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VLCBenchTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		70AB4B4E55FD50F1B4561714 /* AVBenchTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AVBenchTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		8172D8C2531C3D4F6F1539B5 /* BenchBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BenchBackend.swift; sourceTree = "<group>"; };
 		930E50D58D9ADD8334625133 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		9B87F7C269BD60A54027CA17 /* AetherBench */ = {isa = PBXFileReference; includeInIndex = 0; path = AetherBench; sourceTree = BUILT_PRODUCTS_DIR; };
+		A52126CF86487731C56CB072 /* AVPlayerBackendTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AVPlayerBackendTests.swift; sourceTree = "<group>"; };
 		C0C04DC6CE2645B43592F1A3 /* VLCBench */ = {isa = PBXFileReference; includeInIndex = 0; path = VLCBench; sourceTree = BUILT_PRODUCTS_DIR; };
 		C6112D57FA7A689A54291B33 /* AVBench */ = {isa = PBXFileReference; includeInIndex = 0; path = AVBench; sourceTree = BUILT_PRODUCTS_DIR; };
 		D103E6CBC42AF0C4090E92E1 /* BenchArgumentsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BenchArgumentsTests.swift; sourceTree = "<group>"; };
+		DCC1AAB7E0DBFFF9C9914D32 /* BenchWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BenchWindow.swift; sourceTree = "<group>"; };
 		E4A84D4E1CD324E00F8E6010 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		E4CE92192C20DF62D27EFF43 /* VLCKitBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VLCKitBackend.swift; sourceTree = "<group>"; };
 		E9CAA105AA118C8B8928E5A4 /* BenchArguments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BenchArguments.swift; sourceTree = "<group>"; };
+		ED71B1A70C33612A5C6D9369 /* BenchRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BenchRunner.swift; sourceTree = "<group>"; };
 		F4943A793DE0089C443CAF03 /* AVPlayerBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AVPlayerBackend.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -106,6 +136,7 @@
 			isa = PBXGroup;
 			children = (
 				E4A84D4E1CD324E00F8E6010 /* .gitkeep */,
+				A52126CF86487731C56CB072 /* AVPlayerBackendTests.swift */,
 				D103E6CBC42AF0C4090E92E1 /* BenchArgumentsTests.swift */,
 			);
 			path = AVBenchTests;
@@ -149,8 +180,12 @@
 		7E2FFF42529FC6608FB111CD /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				03AC06AB3B9295795DF1AA8E /* BackendFactory.swift */,
 				E9CAA105AA118C8B8928E5A4 /* BenchArguments.swift */,
+				8172D8C2531C3D4F6F1539B5 /* BenchBackend.swift */,
 				3383D8D5A4DB82104534436D /* BenchReport.swift */,
+				ED71B1A70C33612A5C6D9369 /* BenchRunner.swift */,
+				DCC1AAB7E0DBFFF9C9914D32 /* BenchWindow.swift */,
 				05B1C4DB1FEC7C68EDEFDD27 /* main.swift */,
 			);
 			path = Shared;
@@ -337,8 +372,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				1FF61BF550BD2213EA80EFA0 /* AetherBackend.swift in Sources */,
+				232243E6F837050980B50C23 /* BackendFactory.swift in Sources */,
 				50E07C477043BFB03E953476 /* BenchArguments.swift in Sources */,
+				B042B2678D308381106A9D2F /* BenchBackend.swift in Sources */,
 				FD9D86651563C56C3295CDD1 /* BenchReport.swift in Sources */,
+				115FAE5A8BC04A91F0ED32A7 /* BenchRunner.swift in Sources */,
+				BB400BB33A6A085B8175BF36 /* BenchWindow.swift in Sources */,
 				BCF808A04BE1EB094438DA36 /* main.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -348,9 +387,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				157993BC07585EDF7A29DB12 /* AVPlayerBackend.swift in Sources */,
+				CEB4F65041C84899B572C5D5 /* AVPlayerBackendTests.swift in Sources */,
+				675EFBA497670BF2E7B54C09 /* BackendFactory.swift in Sources */,
 				64162293DD5121DC26578C45 /* BenchArguments.swift in Sources */,
 				03F0792670DC1819F2EBCFBE /* BenchArgumentsTests.swift in Sources */,
+				CA04E26FB249DE4BCD1A0E30 /* BenchBackend.swift in Sources */,
 				33E3797F81BB39FD2A715E21 /* BenchReport.swift in Sources */,
+				426F1A49B145E43D21368366 /* BenchRunner.swift in Sources */,
+				1D2353D1EE8580DCEBE2040C /* BenchWindow.swift in Sources */,
 				DBF67837DB79AD0334624968 /* main.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -360,8 +404,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				F947168733B8520676B4FD20 /* AVPlayerBackend.swift in Sources */,
+				36C5C84B4DED474DEC1C09AE /* BackendFactory.swift in Sources */,
 				729A2109FB003DBD2DF8942C /* BenchArguments.swift in Sources */,
+				9F3FE7E98B1F443C5394C541 /* BenchBackend.swift in Sources */,
 				8B11C39880052B4265AEADC4 /* BenchReport.swift in Sources */,
+				B743EF2CE0C570C332AA260F /* BenchRunner.swift in Sources */,
+				8AB774318AAF5E083F14A842 /* BenchWindow.swift in Sources */,
 				34F7950E02E77B474A631D87 /* main.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -370,8 +418,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B8AF0C6E6BB81FED48AF3216 /* BackendFactory.swift in Sources */,
 				1EA9051311FCF449415FE100 /* BenchArguments.swift in Sources */,
+				0CE5E1927AB0092DF9E3EE92 /* BenchBackend.swift in Sources */,
 				C6FAB7B7A975961EB8303270 /* BenchReport.swift in Sources */,
+				CE6FA9DCC20185FE7E3ACB2E /* BenchRunner.swift in Sources */,
+				EE518B351F8E62CB6F4D2F5F /* BenchWindow.swift in Sources */,
 				B2D8D42E09D732620E1A21A8 /* VLCKitBackend.swift in Sources */,
 				B2DDD0CC7A4C0FFB5C249963 /* main.swift in Sources */,
 			);
@@ -381,8 +433,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				63AF71D6CDAD7D2BB742D44E /* BackendFactory.swift in Sources */,
 				65F854F7931ECA6BCE785D4F /* BenchArguments.swift in Sources */,
+				3872CB16E2B2F535A7EFDCB5 /* BenchBackend.swift in Sources */,
 				D018D7B84093732111C98F64 /* BenchReport.swift in Sources */,
+				E087B139A707A958390DFCD3 /* BenchRunner.swift in Sources */,
+				C779D8A0A4CC7B53203E2C2F /* BenchWindow.swift in Sources */,
 				FC431FC04EE8E84738897514 /* VLCKitBackend.swift in Sources */,
 				08E23763E283E52610D2229F /* main.swift in Sources */,
 			);
@@ -393,8 +449,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				FD6F7C9DD6778F40EE9B118A /* AetherBackend.swift in Sources */,
+				4CB99C4F81AC7E18A6F51C19 /* BackendFactory.swift in Sources */,
 				E3C7F3BCB49548907B16741F /* BenchArguments.swift in Sources */,
+				FA11C17A784593A24EDA14FE /* BenchBackend.swift in Sources */,
 				1E97A2C683EAC8EA2F5529C9 /* BenchReport.swift in Sources */,
+				693E0AEE4FAEAF63744A503C /* BenchRunner.swift in Sources */,
+				16889A511F1AC10C2695E956 /* BenchWindow.swift in Sources */,
 				D62B467B83B709E89FA941C8 /* main.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
