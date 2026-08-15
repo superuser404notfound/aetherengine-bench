@@ -1,0 +1,224 @@
+#!/usr/bin/env bash
+# Runs mpv (the CLI, which is libmpv with its own renderer, the way anyone
+# actually consumes it) against a fixture and reports frame/output stats
+# through the JSON IPC socket, in the same shape BenchReport.swift defines
+# so the in-process backends and mpv can be read through one schema.
+#
+# Timing and delta semantics mirror Sources/Shared/BenchRunner.swift: settle,
+# then stamp startedAt and snapshot counters, then measure, then stamp
+# endedAt and snapshot counters again, reporting deltas over the measurement
+# window only.
+set -euo pipefail
+
+URL="${1:?usage: run-mpv.sh <file> [settle=15] [measure=60] [report=/tmp/mpv.json]}"
+SETTLE="${2:-15}"
+MEASURE="${3:-60}"
+REPORT="${4:-/tmp/mpv.json}"
+[ -f "$URL" ] || { echo "run-mpv.sh: no such file: $URL" >&2; exit 1; }
+
+# Fixed window on a fixed display, matching BenchWindow.swift's default
+# 1920x1080 on display index 0. Window size and display move GPU load more
+# than any codec difference, so both are pinned the same way for mpv.
+WINDOW_W=1920
+WINDOW_H=1080
+
+SOCK="$(mktemp -u "${TMPDIR:-/tmp}/mpv-bench-XXXXXX").sock"
+LOG="$(mktemp -u "${TMPDIR:-/tmp}/mpv-bench-XXXXXX").log"
+rm -f "$SOCK"
+
+MPV_PID=""
+cleanup() {
+  if [ -n "$MPV_PID" ] && kill -0 "$MPV_PID" 2>/dev/null; then
+    kill "$MPV_PID" 2>/dev/null || true
+    wait "$MPV_PID" 2>/dev/null || true
+  fi
+  rm -f "$SOCK" "$LOG"
+}
+trap cleanup EXIT
+
+mpv \
+  --input-ipc-server="$SOCK" \
+  --no-config \
+  --geometry="${WINDOW_W}x${WINDOW_H}+0+0" --autofit="${WINDOW_W}x${WINDOW_H}" --screen=0 \
+  --no-border --keep-open=no --pause=no \
+  --osc=no --no-terminal --really-quiet \
+  --sid=no \
+  --hwdec=auto-safe \
+  "$URL" >"$LOG" 2>&1 &
+MPV_PID=$!
+
+# Wait for the IPC socket to exist, bounded: a benchmark that hangs on a
+# broken launch instead of failing is worse than one that fails loudly.
+deadline=$((SECONDS + 10))
+while [ ! -S "$SOCK" ]; do
+  if ! kill -0 "$MPV_PID" 2>/dev/null; then
+    echo "run-mpv.sh: mpv exited before opening its IPC socket, see $LOG" >&2
+    exit 1
+  fi
+  if [ "$SECONDS" -ge "$deadline" ]; then
+    echo "run-mpv.sh: timed out waiting for mpv's IPC socket at $SOCK" >&2
+    exit 1
+  fi
+  sleep 0.1
+done
+
+# Reads one property over IPC. `nc -U` is fragile on its own: a response can
+# be preceded by an unrelated event line, and a socket read that comes back
+# empty must never be silently read as "0". This filters for the first
+# genuine command reply (the "error" key is only ever present on command
+# replies, never on events) and prints nothing if the property truly did not
+# resolve, so callers can tell "unresolved" apart from a real zero.
+ask() {
+  printf '{ "command": ["get_property", "%s"] }\n' "$1" \
+    | nc -U -w 2 "$SOCK" 2>/dev/null \
+    | python3 -c '
+import json, sys
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    try:
+        obj = json.loads(line)
+    except json.JSONDecodeError:
+        continue
+    if "error" not in obj:
+        continue  # an event notification, not the reply to our query
+    if obj["error"] == "success" and "data" in obj:
+        print(obj["data"])
+    break
+'
+}
+
+# Fails the whole script the moment a required property comes back empty,
+# in the current shell (not a subshell), so it cannot be swallowed by a
+# command-substitution assignment the way `exit` inside ask() itself would be.
+require() {
+  if [ -z "$1" ]; then
+    echo "run-mpv.sh: mpv property '$2' did not resolve over IPC (empty or unavailable), refusing to report a fabricated 0" >&2
+    exit 1
+  fi
+}
+
+# vo-configured is mpv's own signal that a frame has actually been handed to
+# the video output, i.e. that load succeeded and playback truly started, the
+# same gate `backend.load()` throwing serves in the Swift backends.
+deadline=$((SECONDS + 10))
+while :; do
+  configured=$(ask vo-configured)
+  [ "$configured" = "True" ] && break
+  if [ "$SECONDS" -ge "$deadline" ]; then
+    echo "run-mpv.sh: mpv never reported vo-configured, see $LOG" >&2
+    exit 1
+  fi
+  sleep 0.1
+done
+
+# The window must match, not just be asked for: read back what mpv actually
+# rendered into rather than trusting --geometry/--autofit did the right thing.
+OSD_W=$(ask osd-width); require "$OSD_W" osd-width
+OSD_H=$(ask osd-height); require "$OSD_H" osd-height
+if [ "$OSD_W" != "$WINDOW_W" ] || [ "$OSD_H" != "$WINDOW_H" ]; then
+  echo "run-mpv.sh: mpv's window is ${OSD_W}x${OSD_H}, expected ${WINDOW_W}x${WINDOW_H}" >&2
+  exit 1
+fi
+
+# Settle first, exactly like BenchRunner: startedAt/endedAt must bound the
+# measured seconds only, never the settling ones.
+sleep "$SETTLE"
+STARTED=$(date -u +%s)
+
+# Static output metadata is stable once playback has settled; read it here,
+# at the same point BenchRunner snapshots the start-of-window counters.
+WIDTH=$(ask width); require "$WIDTH" width
+HEIGHT=$(ask height); require "$HEIGHT" height
+FPS=$(ask container-fps); require "$FPS" container-fps
+PIXFMT=$(ask "video-params/pixelformat"); require "$PIXFMT" "video-params/pixelformat"
+GAMMA=$(ask "video-params/gamma"); require "$GAMMA" "video-params/gamma"
+# Audio channel count is the one property allowed to legitimately come back
+# unavailable: a video with no audio track is a real state, not an IPC
+# failure, and AVPlayerBackend reports 0 for the same case.
+CHANNELS=$(ask "audio-params/channel-count"); CHANNELS="${CHANNELS:-0}"
+
+# mpv exposes no presented-frame counter (checked --list-properties: no
+# vo-passed-frame-count or equivalent exists in 0.41.0; estimated-frame-number
+# is documented as "only an estimate" computed from the same two quantities
+# used below). frame-drop-count IS a real counter though (frames the VO
+# actually dropped under the default --framedrop=vo), so it is used as-is,
+# not derived. playback-time is real media position (accounts for stalls,
+# unlike wall-clock elapsed time), giving the same kind of proxy
+# AVPlayerBackend and AetherBackend's native path already use for
+# deliveredFrames: fps * elapsed media time, minus real drops, clamped to
+# zero at each endpoint before taking the delta, exactly mirroring
+# BenchRunner's arithmetic.
+PT_START=$(ask playback-time); require "$PT_START" playback-time
+DROPS_START=$(ask frame-drop-count); require "$DROPS_START" frame-drop-count
+
+sleep "$MEASURE"
+ENDED=$(date -u +%s)
+
+PT_END=$(ask playback-time); require "$PT_END" playback-time
+DROPS_END=$(ask frame-drop-count); require "$DROPS_END" frame-drop-count
+
+VERSION=$(mpv --version | head -1)
+
+python3 - "$REPORT" "$WIDTH" "$HEIGHT" "$FPS" "$PIXFMT" "$GAMMA" "$CHANNELS" \
+         "$PT_START" "$DROPS_START" "$PT_END" "$DROPS_END" "$MEASURE" \
+         "$STARTED" "$ENDED" "$(basename "$URL")" "$VERSION" <<'PY'
+import json, re, sys, time
+
+(report, w, h, fps, pixfmt, gamma, channels,
+ pt_start, drops_start, pt_end, drops_end, measure,
+ started, ended, fixture, version) = sys.argv[1:17]
+
+fps = float(fps)
+measure = float(measure)
+pt_start, pt_end = float(pt_start), float(pt_end)
+drops_start, drops_end = int(drops_start), int(drops_end)
+
+# Same clamp-then-delta arithmetic as BenchRunner.swift: each endpoint's
+# delivered-frame estimate is clamped to zero before the window delta is
+# taken, so a session that has not produced anything yet never contributes
+# a phantom negative.
+def delivered_at(playback_time, drops):
+    return max(0, int(playback_time * fps) - drops)
+
+delivered = max(0, delivered_at(pt_end, drops_end) - delivered_at(pt_start, drops_start))
+dropped = max(0, drops_end - drops_start)
+expected = int(measure * fps)
+
+# FFmpeg pixel-format naming: an explicit bit-depth digit run follows the
+# "p" only for >8-bit formats (yuv420p10le, yuv444p16le); its absence means
+# 8-bit (yuv420p, nv12). Informational only, like AVPlayerBackend's and
+# AetherBackend's colorTransfer/bitDepth: not meant to be compared byte for
+# byte against another backend's vocabulary for the same field.
+m = re.search(r'p(\d+)(?:le|be)?$', pixfmt)
+bit_depth = int(m.group(1)) if m else 8
+
+stamp = lambda secs: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(int(secs)))
+
+report_obj = {
+    "backend": "mpv",
+    "engineVersion": version,
+    "fixture": fixture,
+    "deliveredFrames": delivered,
+    "droppedFrames": dropped,
+    "expectedFrames": expected,
+    "output": {
+        "width": int(w),
+        "height": int(h),
+        "bitDepth": bit_depth,
+        "colorTransfer": gamma,
+        "audioChannels": int(channels),
+    },
+    "startedAt": stamp(started),
+    "endedAt": stamp(ended),
+    # servingPath is omitted, not written as null: mpv has exactly one
+    # playback path, unlike the backends that pick between more than one.
+}
+
+with open(report, "w") as f:
+    json.dump(report_obj, f, indent=2, sort_keys=True)
+    f.write("\n")
+PY
+
+echo "run-mpv.sh: wrote $REPORT"
