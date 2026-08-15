@@ -1,0 +1,277 @@
+#!/usr/bin/env python3
+"""Turns a Results/*.json file (Scripts/orchestrate.py's output) into the
+markdown block published under the comparison table in AetherEngine's
+README and mirrored on the docs website. This is the only part of the
+whole benchmark a reader ever sees, so it has to be honest before it is
+pretty:
+
+- A cell whose runs were all discarded renders as n/a plus the reason.
+  Never a number, never a blank a reader would skim past.
+- Versions come from results["versions"] (derived by orchestrate.py from
+  repository state), never from a string embedded in a backend or report.
+  An unresolved version prints the word "unresolved", it is not hidden.
+- Sentinels are not data. bitDepth 0, colorTransfer "unreported"/"unknown"
+  all mean "this engine does not report it"; droppedFrames -1 means "not
+  reported", which is not the same as zero drops. None of these print as
+  if they were measurements.
+- servingPath, where present, says which of an engine's own internal
+  playback paths actually served a fixture (only KSPlayer sets it today,
+  and which path wins is genuinely fixture-dependent on this machine, see
+  Sources/Backends/KSPlayerBackend.swift). Read per cell, never assumed.
+- Launch failures and thermal state are part of the result: a partially
+  discarded cell says so next to its numbers, a fully discarded cell says
+  so instead of a number, and a session's launch-failure counts are
+  printed rather than folded silently into a clean-looking median.
+"""
+import json
+import statistics
+import sys
+
+# Match the spelling used in AetherEngine's own README comparison table
+# ("How it compares"), not an invented label.
+NAMES = {
+    "aether": "AetherEngine",
+    "ksplayer": "KSPlayer",
+    "avplayer": "AVPlayer",
+    "vlckit": "VLCKit",
+    "mpv": "libmpv",
+}
+
+# bitDepth 0 (VLCKitBackend, mpv when neither pixelformat property resolved)
+# and colorTransfer "unreported" (VLCKitBackend) / "unknown" (AVPlayerBackend's
+# own fallback) all mean the same thing: the engine's API surface used here
+# does not expose the value. Case-folded because nothing guarantees a future
+# backend spells it identically.
+_UNREPORTED_TRANSFERS = {"unreported", "unknown"}
+
+
+def _is_unreported_transfer(value):
+    return not value or str(value).strip().lower() in _UNREPORTED_TRANSFERS
+
+
+def _median(values):
+    values = [v for v in values if v is not None]
+    return statistics.median(values) if values else None
+
+
+def _unique(items):
+    seen = []
+    for item in items:
+        if item and item not in seen:
+            seen.append(item)
+    return seen
+
+
+def summarize(runs):
+    """Groups runs by (backend, fixture) and reduces each group to the
+    figures the table needs: the median over valid (non-discarded) runs
+    only, plus enough about the discarded ones that a partial or total
+    discard is never silently invisible downstream.
+    """
+    table = {}
+    for run in runs:
+        cell = table.setdefault(run["backend"], {}).setdefault(run["fixture"], {"_runs": []})
+        cell["_runs"].append(run)
+
+    for fixtures in table.values():
+        for cell in fixtures.values():
+            _finalize_cell(cell)
+    return table
+
+
+def _finalize_cell(cell):
+    all_runs = cell.pop("_runs")
+    valid = [r for r in all_runs if not r.get("discarded")]
+    discarded = [r for r in all_runs if r.get("discarded")]
+
+    cell["totalRuns"] = len(all_runs)
+    cell["discardedCount"] = len(discarded)
+    cell["discardedReasons"] = _unique(r.get("discardReason") for r in discarded)
+
+    if not valid:
+        cell["valid"] = False
+        cell["reason"] = "; ".join(cell["discardedReasons"]) or "no valid run"
+        return
+
+    cell["valid"] = True
+
+    def med(getter, ndigits=None):
+        value = _median(getter(r) for r in valid)
+        if value is None:
+            return None
+        return round(value, ndigits) if ndigits is not None else round(value)
+
+    cell["cpuPowerMw"] = med(lambda r: (r.get("power") or {}).get("cpuPowerMw"))
+    cell["gpuPowerMw"] = med(lambda r: (r.get("power") or {}).get("gpuPowerMw"))
+    cell["cpuPercent"] = med(lambda r: (r.get("process") or {}).get("cpuPercentMean"), 1)
+    cell["eResidency"] = med(lambda r: (r.get("power") or {}).get("eClusterResidency"), 1)
+    cell["rssMb"] = med(lambda r: (r.get("process") or {}).get("rssMbMean"))
+    cell["rssPeakMb"] = med(lambda r: (r.get("process") or {}).get("rssMbPeak"))
+
+    cell["deliveredFrames"] = med(lambda r: (r.get("report") or {}).get("deliveredFrames"))
+    cell["expectedFrames"] = med(lambda r: (r.get("report") or {}).get("expectedFrames"))
+
+    # -1 is "not reported" (KSPlayer's KSAVPlayer path has no drop counter at
+    # all), never a real negative drop count: excluded before the median,
+    # never averaged in and never displayed as if it were a measurement.
+    reporting_runs = [r for r in valid if r.get("droppedFramesReported")]
+    cell["droppedFramesReported"] = bool(reporting_runs)
+    cell["droppedFrames"] = (
+        round(_median((r.get("report") or {}).get("droppedFrames") for r in reporting_runs))
+        if reporting_runs else None
+    )
+
+    cell["servingPaths"] = _unique((r.get("report") or {}).get("servingPath") for r in valid)
+
+    first_output = (valid[0].get("report") or {}).get("output") or {}
+    cell["width"] = first_output.get("width")
+    cell["height"] = first_output.get("height")
+    bit_depth = first_output.get("bitDepth")
+    cell["bitDepth"] = bit_depth if bit_depth else None
+    transfer = first_output.get("colorTransfer")
+    cell["colorTransfer"] = None if _is_unreported_transfer(transfer) else transfer
+
+
+def _infer_repeats(table, fixture):
+    counts = [cell.get("totalRuns", 0) for fixtures in table.values()
+              for fx, cell in fixtures.items() if fx == fixture]
+    return max(counts) if counts else None
+
+
+def _fmt_mw(value):
+    return "not reported" if value is None else f"{value} mW"
+
+
+def _fmt_pct(value):
+    return "not reported" if value is None else f"{value:.1f}%"
+
+
+def _fmt_mb(value):
+    return "not reported" if value is None else f"{value} MB"
+
+
+def _format_detail(name, cell):
+    if cell["deliveredFrames"] is not None and cell["expectedFrames"] is not None:
+        frames = f"{cell['deliveredFrames']}/{cell['expectedFrames']} delivered/expected"
+    else:
+        frames = "delivered/expected frames not reported"
+
+    if cell["droppedFramesReported"]:
+        dropped = f"dropped {cell['droppedFrames']}"
+    else:
+        dropped = "dropped frames not reported by this engine"
+
+    res = f"{cell['width']}x{cell['height']}" if cell.get("width") and cell.get("height") \
+        else "resolution not reported"
+
+    bit_depth, transfer = cell.get("bitDepth"), cell.get("colorTransfer")
+    if bit_depth is None and transfer is None:
+        output_desc = "bit depth and color transfer not reported by this engine"
+    elif bit_depth is None:
+        output_desc = f"bit depth not reported by this engine, transfer {transfer}"
+    elif transfer is None:
+        output_desc = f"{bit_depth}-bit, color transfer not reported by this engine"
+    else:
+        output_desc = f"{bit_depth}-bit, {transfer}"
+
+    line = f"- **{name}**: {frames}, {dropped}, {res}, {output_desc}."
+    paths = cell.get("servingPaths") or []
+    if len(paths) == 1:
+        line += f" Served via **{paths[0]}**."
+    elif len(paths) > 1:
+        line += f" Served via different paths across repeats ({', '.join(paths)}, see raw results)."
+    return line
+
+
+def render(results, fixture="hevc-4k-hdr10.mp4"):
+    table = summarize(results.get("runs", []))
+    protocol = results.get("protocol") or {}
+    measure_s = protocol.get("measure")
+    if measure_s is None:
+        measure_s = 60
+    repeats = protocol.get("repeats") or _infer_repeats(table, fixture) or 3
+    machine = results.get("machine", "unknown machine")
+    os_version = results.get("os", "unknown OS")
+
+    lines = []
+    if results.get("dryRun"):
+        note = results.get("note", "shortened validation timings")
+        lines += [f"**DRY RUN: {note}, not published data.**", ""]
+
+    lines += [
+        f"Measured on {machine} (MacBook Air, fanless), macOS {os_version}, "
+        f"{fixture}, windowed 1920x1080, {measure_s:.0f} s, median of {repeats}.",
+        "",
+        "| | CPU power | GPU power | CPU load | on E-cores | RSS | peak RSS |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+
+    footnotes = []
+    detail_lines = []
+    for backend, name in NAMES.items():
+        cell = table.get(backend, {}).get(fixture)
+        if not cell:
+            lines.append(f"| **{name}** | not run | | | | | |")
+            continue
+        if not cell["valid"]:
+            lines.append(f"| **{name}** | n/a ({cell['reason']}) | | | | | |")
+            continue
+
+        marker = ""
+        if cell["discardedCount"]:
+            footnotes.append(
+                f"[{len(footnotes) + 1}] **{name}**, {fixture}: {cell['discardedCount']} of "
+                f"{cell['totalRuns']} repeat(s) discarded and excluded from the figures above "
+                f"({'; '.join(cell['discardedReasons'])}).")
+            marker = f" [{len(footnotes)}]"
+
+        lines.append(
+            f"| **{name}**{marker} | {_fmt_mw(cell['cpuPowerMw'])} | {_fmt_mw(cell['gpuPowerMw'])} | "
+            f"{_fmt_pct(cell['cpuPercent'])} of a core | {_fmt_pct(cell['eResidency'])} | "
+            f"{_fmt_mb(cell['rssMb'])} | {_fmt_mb(cell['rssPeakMb'])} |")
+        detail_lines.append(_format_detail(name, cell))
+
+    lines.append("")
+    if footnotes:
+        lines.extend(footnotes)
+        lines.append("")
+
+    if detail_lines:
+        lines.append(
+            "Frame delivery and output (median delivered/expected frames, dropped frames; "
+            "resolution, bit depth and HDR transfer are informational per engine and are never "
+            "comparable across engines):")
+        lines.extend(detail_lines)
+        lines.append("")
+
+    # Versions come from the results file, where orchestrate.py derived them
+    # from repository state. Never from a string typed by hand into a backend.
+    resolved = results.get("versions", {})
+    versions = ", ".join(f"{name} {resolved.get(key, 'unresolved')}" for key, name in NAMES.items())
+    lines.append(f"Versions: {versions}.")
+
+    launch_failures = {b: n for b, n in (results.get("launchFailures") or {}).items() if n}
+    if launch_failures:
+        fails = ", ".join(f"{NAMES.get(b, b)} {n}" for b, n in launch_failures.items())
+        lines += [
+            "",
+            "Launch failures during this session (the process crashed or refused to become "
+            "ready on a launch attempt; every failed attempt is counted, whether or not a "
+            f"later attempt in the same cell went on to succeed): {fails}.",
+        ]
+
+    lines += [
+        "",
+        "Power figures are package power with an idle baseline subtracted, so they are "
+        "attributable to the run and not to the machine.",
+        "libmpv is measured with --hwdec=auto-safe (hardware decode). mpv's own shipped "
+        "default is software decode (--hwdec=no); measuring that default would score a flag "
+        "omission as engine inefficiency rather than a real difference between engines.",
+        "Method and raw results: https://github.com/superuser404notfound/aetherengine-bench",
+    ]
+    return "\n".join(lines)
+
+
+if __name__ == "__main__":
+    with open(sys.argv[1]) as f:
+        print(render(json.load(f)))
