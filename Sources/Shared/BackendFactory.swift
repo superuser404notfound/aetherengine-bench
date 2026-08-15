@@ -6,20 +6,19 @@ import AppKit
 /// have to know which binary carries what.
 @MainActor
 func makeBackend(for kind: BackendKind) throws -> BenchBackend {
-    struct WrongBinary: Error { let asked: BackendKind }
     #if BACKEND_AETHER
-    guard kind == .aether else { throw WrongBinary(asked: kind) }
+    guard kind == .aether else { throw BackendError.wrongBinary(asked: kind) }
     return try AetherBackend()
     #elseif BACKEND_AVPLAYER
-    guard kind == .avplayer else { throw WrongBinary(asked: kind) }
+    guard kind == .avplayer else { throw BackendError.wrongBinary(asked: kind) }
     return AVPlayerBackend()
     #elseif BACKEND_VLCKIT
-    guard kind == .vlckit else { throw WrongBinary(asked: kind) }
+    guard kind == .vlckit else { throw BackendError.wrongBinary(asked: kind) }
     return VLCKitBackend()
     #elseif BACKEND_KSPLAYER
-    guard kind == .ksplayer else { throw WrongBinary(asked: kind) }
+    guard kind == .ksplayer else { throw BackendError.wrongBinary(asked: kind) }
     return KSPlayerBackend()
     #else
-    throw WrongBinary(asked: kind)
+    throw BackendError.wrongBinary(asked: kind)
     #endif
 }

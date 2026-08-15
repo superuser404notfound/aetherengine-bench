@@ -28,15 +28,18 @@ final class AVPlayerBackend: BenchBackend {
 
         let videoTracks = try await asset.loadTracks(withMediaType: .video)
         let audioTracks = try await asset.loadTracks(withMediaType: .audio)
-        guard let video = videoTracks.first else { return }
+        // No usable video track means there is nothing to measure. Returning
+        // quietly here would let the runner play silence for the full window and
+        // write a report full of zeroes that reads like a real measurement.
+        guard let video = videoTracks.first else { throw BackendError.noVideoTrack }
         let descriptions = try await video.load(.formatDescriptions)
-        guard let formatDescription = descriptions.first else { return }
         // Coded pixel dimensions, not `naturalSize`. `naturalSize` folds in the
         // pixel aspect ratio, so a fixture whose SAR compensates for an
         // odd-to-even height rounding (858:857 here) reports a display width a
         // couple of pixels off the decoder's actual output. The FFmpeg-backed
         // engines this benchmark also drives report coded dimensions, so this
         // keeps `OutputInfo.width/height` comparable across backends.
+        guard let formatDescription = descriptions.first else { throw BackendError.noOutputDescription }
         let dimensions = CMVideoFormatDescriptionGetDimensions(formatDescription)
         let ext = CMFormatDescriptionGetExtensions(formatDescription) as? [String: Any] ?? [:]
         let transfer = (ext[kCVImageBufferTransferFunctionKey as String] as? String) ?? "unknown"
@@ -47,6 +50,8 @@ final class AVPlayerBackend: BenchBackend {
            let basic = CMAudioFormatDescriptionGetStreamBasicDescription(desc) {
             channels = Int(basic.pointee.mChannelsPerFrame)
         }
+        nominalFrameRate = Double(try await video.load(.nominalFrameRate))
+        guard nominalFrameRate > 0 else { throw BackendError.noOutputDescription }
         loadedOutput = OutputInfo(width: Int(dimensions.width), height: Int(dimensions.height),
                                   bitDepth: depth, colorTransfer: transfer, audioChannels: channels)
     }
@@ -58,11 +63,16 @@ final class AVPlayerBackend: BenchBackend {
         Int(item?.accessLog()?.events.last?.numberOfDroppedVideoFrames ?? 0)
     }
 
-    /// AVPlayer exposes no presented-frame counter, so delivered frames are
-    /// derived from elapsed playback time and the track's nominal frame rate.
+    private(set) var nominalFrameRate: Double = 0
+
+    /// AVPlayer exposes no presented-frame counter, so this is a proxy: elapsed
+    /// playback time times the nominal rate, minus the drops AVFoundation admits
+    /// to. It cannot see frames lost below AVFoundation, so it is optimistic by
+    /// construction. It is used only for the validity gate (did this session play
+    /// roughly the expected amount), never as a quality number against engines
+    /// that count real frames.
     var deliveredFrames: Int {
-        guard let item, let track = item.tracks.first(where: { $0.assetTrack?.mediaType == .video }),
-              let fps = track.assetTrack.map({ Double($0.nominalFrameRate) }), fps > 0 else { return 0 }
-        return Int(item.currentTime().seconds * fps) - droppedFrames
+        guard let item, nominalFrameRate > 0 else { return 0 }
+        return max(0, Int(item.currentTime().seconds * nominalFrameRate) - droppedFrames)
     }
 }

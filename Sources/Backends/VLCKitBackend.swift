@@ -1,6 +1,15 @@
-import VLCKitSPM
+// Placeholder stub, until Task 5 replaces it with the real VLCKit backend.
+import AppKit
 
-// Placeholder. Task 2 replaces this with the VLCKit playback backend.
-// Module name is VLCKitSPM: the package is named VLCKit in project.yml,
-// but vlckit-spm's own Package.swift exposes its library product as
-// VLCKitSPM, not VLCKit.
+@MainActor
+final class VLCKitBackend: BenchBackend {
+    static var engineVersion: String { "stub" }
+    let view = NSView()
+    func load(_ url: URL) async throws { throw BackendError.notImplemented(.vlckit) }
+    func play() {}
+    func stop() {}
+    var deliveredFrames: Int { 0 }
+    var droppedFrames: Int { 0 }
+    var nominalFrameRate: Double { 0 }
+    var output: OutputInfo? { nil }
+}

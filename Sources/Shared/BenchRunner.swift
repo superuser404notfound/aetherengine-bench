@@ -15,18 +15,26 @@ final class BenchRunner {
         _ = BenchWindow.make(size: arguments.windowSize, displayIndex: arguments.displayIndex, hosting: backend.view)
         do {
             try await backend.load(arguments.url)
-            let started = Date()
             backend.play()
-            try await Task.sleep(for: .seconds(arguments.settle + arguments.measure))
+            // Settle first, then open the measurement window. The sampler runs
+            // against exactly this window, so startedAt/endedAt must bound the
+            // measured seconds only, never the settling ones.
+            try await Task.sleep(for: .seconds(arguments.settle))
+            let started = Date()
+            let framesAtStart = backend.deliveredFrames
+            let dropsAtStart = backend.droppedFrames
+            try await Task.sleep(for: .seconds(arguments.measure))
+            let ended = Date()
+            guard let output = backend.output else { throw BackendError.noOutputDescription }
             let report = BenchReport(
                 backend: arguments.backend.rawValue,
                 engineVersion: type(of: backend).engineVersion,
                 fixture: arguments.url.lastPathComponent,
-                deliveredFrames: backend.deliveredFrames,
-                droppedFrames: backend.droppedFrames,
-                expectedFrames: 0,
-                output: backend.output ?? OutputInfo(width: 0, height: 0, bitDepth: 0, colorTransfer: "none", audioChannels: 0),
-                startedAt: started, endedAt: Date())
+                deliveredFrames: max(0, backend.deliveredFrames - framesAtStart),
+                droppedFrames: max(0, backend.droppedFrames - dropsAtStart),
+                expectedFrames: Int(arguments.measure * backend.nominalFrameRate),
+                output: output,
+                startedAt: started, endedAt: ended)
             try JSONEncoder.bench.encode(report).write(to: arguments.reportURL)
             backend.stop()
         } catch {

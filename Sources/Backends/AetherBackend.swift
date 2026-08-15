@@ -1,3 +1,15 @@
-import AetherEngine
+// Placeholder stub, until Task 4 replaces it with the real AetherEngine backend.
+import AppKit
 
-// Placeholder. Task 2 replaces this with the AetherEngine playback backend.
+@MainActor
+final class AetherBackend: BenchBackend {
+    static var engineVersion: String { "stub" }
+    let view = NSView()
+    func load(_ url: URL) async throws { throw BackendError.notImplemented(.aether) }
+    func play() {}
+    func stop() {}
+    var deliveredFrames: Int { 0 }
+    var droppedFrames: Int { 0 }
+    var nominalFrameRate: Double { 0 }
+    var output: OutputInfo? { nil }
+}
