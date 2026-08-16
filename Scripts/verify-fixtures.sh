@@ -20,15 +20,19 @@ check_duration() { # file
     echo "FAIL $1: duration ${got:-none} s, need at least 100 s"; fail=1
   else echo "ok   $1: ${got} s"; fi
 }
-for f in h264-1080p.mp4 hevc-4k-hdr10.mp4 av1-10bit.mkv vp9.webm hevc-subs.mkv eac3-51.mp4 dv-p81.mp4; do
+for f in h264-1080p.mp4 hevc-4k-hdr10.mp4 hevc-4k-hdr10.mkv av1-10bit.mkv vp9.webm hevc-subs.mkv eac3-51.mp4 dv-p81.mp4; do
   check_duration "$f"
 done
-check h264-1080p.mp4    v:0 stream=codec_name          h264
-check h264-1080p.mp4    v:0 stream=width               1920
-check hevc-4k-hdr10.mp4 v:0 stream=codec_name          hevc
-check hevc-4k-hdr10.mp4 v:0 stream=width               3840
-check hevc-4k-hdr10.mp4 v:0 stream=pix_fmt             yuv420p10le
-check hevc-4k-hdr10.mp4 v:0 stream=color_transfer      smpte2084
+check h264-1080p.mp4     v:0 stream=codec_name          h264
+check h264-1080p.mp4     v:0 stream=width               1920
+check hevc-4k-hdr10.mp4  v:0 stream=codec_name          hevc
+check hevc-4k-hdr10.mp4  v:0 stream=width               3840
+check hevc-4k-hdr10.mp4  v:0 stream=pix_fmt             yuv420p10le
+check hevc-4k-hdr10.mp4  v:0 stream=color_transfer      smpte2084
+check hevc-4k-hdr10.mkv  v:0 stream=codec_name          hevc
+check hevc-4k-hdr10.mkv  v:0 stream=width               3840
+check hevc-4k-hdr10.mkv  v:0 stream=pix_fmt             yuv420p10le
+check hevc-4k-hdr10.mkv  v:0 stream=color_transfer      smpte2084
 check av1-10bit.mkv     v:0 stream=codec_name          av1
 check av1-10bit.mkv     v:0 stream=pix_fmt             yuv420p10le
 check vp9.webm          v:0 stream=codec_name          vp9

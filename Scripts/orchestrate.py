@@ -50,7 +50,7 @@ PLAYER_COMM = {name: path.name for name, path in BINARIES.items()}
 PLAYER_COMM["mpv"] = "mpv"
 
 DEFAULT_FIXTURES = [
-    "hevc-4k-hdr10.mp4", "h264-1080p.mp4", "av1-10bit.mkv", "vp9.webm",
+    "hevc-4k-hdr10.mp4", "hevc-4k-hdr10.mkv", "h264-1080p.mp4", "av1-10bit.mkv", "vp9.webm",
     "hevc-subs.mkv", "eac3-51.mp4", "dv-p81.mp4",
 ]
 BACKENDS = ["aether", "avplayer", "vlckit", "ksplayer", "mpv"]
