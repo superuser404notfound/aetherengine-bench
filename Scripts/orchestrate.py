@@ -110,6 +110,43 @@ MAX_BASELINE_CPU_MW = 250.0
 # a still-declining trend as if they were a plateau.
 BASELINE_STABILITY_TOLERANCE_MW = 50.0
 
+# How long each of the four Swift binaries keeps playing, after writing its
+# report, before exiting (Sources/Shared/BenchArguments.swift's --linger).
+# Exists because the sampler's own window starts and ends slightly later
+# than the player's own settle+measure window (process spawn, `sudo -u`
+# privilege drop, and the sampler's first `ps` call all cost time the
+# player's side does not pay), and without margin the sampler's last
+# sample can land after the player has already exited, discarding an
+# otherwise-clean run: this is what a four-hour session on this project
+# actually hit (AVPlayer 1 of 15 runs usable, VLCKit 11/15, AetherEngine
+# 13/15, KSPlayer 9/15, every discard reading "stopped responding after
+# N-1 of N sample(s) needed"). Measured on this machine (task-11):
+# launching AVBench (the worst-hit engine) through the real `sudo -u`
+# demotion path with a concurrent `sudo powermetrics` sampler running
+# (mirroring measure_once exactly, not a simplification), and clocking the
+# moment the process actually exits against the idealized settle+measure
+# deadline, shows only a 0.28-0.43s margin across five clean-machine
+# trials, comfortably positive but well under the sampler's own 1s sample
+# interval and with visibly no room to spare once a real multi-hour
+# session adds thermal drift and background load neither this quick test
+# nor a fresh machine can reproduce. 5s is roughly 10x that clean-machine
+# margin and several sample intervals of headroom, while still costing no
+# wall-clock time in the common case: see the short, linger-aware grace
+# period _terminate_player is called with below, which signals the player
+# the moment sampling ends instead of waiting the linger out.
+DEFAULT_LINGER_SECONDS = 5.0
+
+# _terminate_player's graceful-wait budget on the success path. Bounded and
+# short on purpose, not sized to DEFAULT_LINGER_SECONDS: the player is
+# already known to still be alive (it is lingering by design) by the time
+# _terminate_player is called, and its report is already on disk (written
+# before the linger sleep began), so there is nothing to gain by waiting
+# it out, only wall-clock cost. This covers the ordinary teardown overhead
+# observed even with no linger at all (~0.3-0.4s between a report being
+# written and the process actually exiting, task-11's own measurement)
+# with margin, then escalates to SIGTERM.
+TERMINATE_GRACE_SECONDS = 3.0
+
 # Mirrors Swift's BenchExitCode.refused (Sources/Shared/BenchRunner.swift):
 # a BackendError.unsupportedFormat throw, a deterministic "this engine does
 # not support this source" refusal (AVPlayer has no AV1 decoder at all,
@@ -128,6 +165,7 @@ class ProtocolConfig:
     repeats: int = 3
     max_launch_attempts: int = DEFAULT_MAX_LAUNCH_ATTEMPTS
     gate_threshold: float = DEFAULT_GATE_THRESHOLD
+    linger: float = DEFAULT_LINGER_SECONDS
 
 
 def parse_iso8601(value):
@@ -384,18 +422,24 @@ def _baseline_subtract(key, value, baseline_value):
     return value - baseline_value
 
 
-def _terminate_player(proc, backend, wait_timeout=60):
+def _terminate_player(proc, backend, wait_timeout=TERMINATE_GRACE_SECONDS):
     """Always called once a measured window is over or abandoned, success
     or failure alike: no path through measure_once may return with the
-    player still alive. Tries a graceful wait first (the player writes its
-    own report and calls stop() on a clock that trails the orchestrator's
-    external settle-wait slightly, see spawn_and_settle's docstring, so it
-    is often still finishing its own teardown right as sampling ends),
-    escalating to SIGTERM and finally SIGKILL only if that does not clear
-    the process in time. wait_timeout is shortened by the caller when the
-    window was abandoned early (a sampler failure) rather than completed
-    normally, so a doomed cell does not sit around for a minute waiting for
-    a player that was never going to produce a trustworthy report anyway.
+    player still alive. Tries a graceful wait first, escalating to SIGTERM
+    and finally SIGKILL only if that does not clear the process in time.
+
+    The graceful wait is short and bounded, not a wait for the player's own
+    natural exit: on the success path the player is, by design, still
+    deliberately alive here (see DEFAULT_LINGER_SECONDS), and its report
+    was already written to disk before it started lingering, so there is
+    nothing left to wait for. Waiting out the linger instead of signalling
+    the player would silently add DEFAULT_LINGER_SECONDS of wall-clock
+    cost to every single run in a session, exactly what the linger fix
+    exists to avoid paying. wait_timeout is shortened further by the
+    caller when the window was abandoned early (a sampler failure) rather
+    than completed normally, so a doomed cell does not sit around waiting
+    for a player that was never going to produce a trustworthy report
+    anyway.
     """
     if proc.poll() is not None:
         return
@@ -517,6 +561,11 @@ def launch(backend, fixture_path, report_path, cfg, stderr_path):
     handle is opened for the duration of the Popen call only: the child
     inherits a dup of the fd at exec time, so closing this process's own
     copy right after does not affect it.
+
+    --linger is passed to the four Swift binaries only (see
+    DEFAULT_LINGER_SECONDS): mpv has no equivalent flag, run-mpv.sh is out
+    of scope for task-11's fix, a known follow-up if the same discard ever
+    shows up under mpv.
     """
     with open(stderr_path, "w") as stderr_file:
         if backend == "mpv":
@@ -526,7 +575,7 @@ def launch(backend, fixture_path, report_path, cfg, stderr_path):
         return subprocess.Popen(demote() + [str(BINARIES[backend]), "--backend", backend, "--url", fixture_path,
                                              "--settle", str(cfg.settle), "--measure", str(cfg.measure),
                                              "--window", "1920x1080", "--display", "0",
-                                             "--report", report_path],
+                                             "--report", report_path, "--linger", str(cfg.linger)],
                                  stderr=stderr_file)
 
 
@@ -722,11 +771,13 @@ def measure_once(backend, fixture, repeat, baseline, cfg, launch_failures, repor
         # No path out of this block, success or exception, may leave the
         # player running: t.join() first so proc_worker's ps reads never
         # race a process this call is about to terminate out from under
-        # them, then terminate. A window abandoned early because power
-        # sampling failed gets a short grace period instead of the normal
-        # one, since there is no report worth waiting a full minute for.
+        # them, then terminate. Both grace periods are short (see
+        # TERMINATE_GRACE_SECONDS): the success path does not wait out the
+        # player's own linger, and a window abandoned early because power
+        # sampling failed gets an even shorter one, since there is no
+        # report worth waiting for at all.
         t.join()
-        _terminate_player(proc, backend, wait_timeout=60 if power_error is None else 5)
+        _terminate_player(proc, backend, wait_timeout=TERMINATE_GRACE_SECONDS if power_error is None else 5)
 
     if power_error is not None:
         record.update(power=None, powerRaw=None, process=results.get("process"), report=None,
@@ -924,6 +975,10 @@ def main():
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--max-launch-attempts", type=int, default=DEFAULT_MAX_LAUNCH_ATTEMPTS)
     parser.add_argument("--gate-threshold", type=float, default=DEFAULT_GATE_THRESHOLD)
+    parser.add_argument("--linger", type=float, default=DEFAULT_LINGER_SECONDS,
+                         help="seconds the four Swift binaries keep playing after writing "
+                              "their report, so this machine's sudo -u/sampler startup lag "
+                              "never races the player's own exit (see DEFAULT_LINGER_SECONDS)")
     parser.add_argument("--fixtures", type=str, default=",".join(DEFAULT_FIXTURES),
                          help="comma-separated fixture filenames under Fixtures/")
     parser.add_argument("--backends", type=str, default=",".join(BACKENDS),
@@ -939,7 +994,7 @@ def main():
 
     cfg = ProtocolConfig(settle=args.settle, measure=args.measure, cooldown=args.cooldown,
                           repeats=args.repeats, max_launch_attempts=args.max_launch_attempts,
-                          gate_threshold=args.gate_threshold)
+                          gate_threshold=args.gate_threshold, linger=args.linger)
     fixtures = [f for f in args.fixtures.split(",") if f]
     backends = [b for b in args.backends.split(",") if b]
     run_session(cfg, fixtures, backends, args.output_dir, dry_run=args.dry_run)

@@ -256,6 +256,49 @@ class EvaluateRunTests(unittest.TestCase):
         # fine, only the power figure derived from it is untrustworthy.
         self.assertTrue(gate["passed"])
 
+    def test_mid_window_crash_reports_a_missing_report_alongside_the_process_failure(self):
+        # task-11: VLCKit's own known startup instability (a real crash
+        # mid-playback, four times in one session, once at 30 of 60
+        # samples on hevc-4k-hdr10.mp4). The process dies before ever
+        # writing a report, so load_report's own "no report file produced"
+        # reaches here as load_error alongside sample_process's failure:
+        # two reasons, not one, and the "report problem" one is what marks
+        # this as a genuine crash rather than the sampler-lag timing
+        # defect (see the next test) that this task actually fixes.
+        reasons, gate = orchestrate.evaluate_run(
+            HEALTHY_POWER, None,
+            "no report file produced (player exited without writing one)",
+            "pid 1234 stopped responding after 30 of 60 sample(s) needed, before the "
+            "60.0s window elapsed (process does not exist (exited, or never started))",
+            "vlckit", "hevc-4k-hdr10.mp4", orchestrate.ProtocolConfig())
+        self.assertEqual(len(reasons), 2)
+        self.assertTrue(any("report problem" in r for r in reasons))
+        self.assertTrue(any("process sampling failed" in r for r in reasons))
+        self.assertIsNone(gate)  # no report at all, nothing to gate on
+
+    def test_timing_defect_reports_only_the_process_failure_no_report_problem(self):
+        # task-11: the exact live symptom this task fixes ("pid 6420
+        # stopped responding after 59 of 60 sample(s) needed"). The player
+        # wrote a full, valid report and would have exited cleanly; only
+        # the sampler's own last read raced it. No "report problem" reason
+        # here is what keeps this distinct, in the published discard
+        # reason, from a genuine mid-window crash like the one above: this
+        # run's engine behaved correctly, only the measurement infra did
+        # not keep up.
+        reasons, gate = orchestrate.evaluate_run(
+            HEALTHY_POWER, make_report(backend="avplayer", fixture="h264-1080p.mp4"), None,
+            "pid 6420 stopped responding after 59 of 60 sample(s) needed, before the "
+            "60.0s window elapsed (process does not exist (exited, or never started))",
+            "avplayer", "h264-1080p.mp4", orchestrate.ProtocolConfig())
+        self.assertEqual(len(reasons), 1)
+        self.assertNotIn("report problem", reasons[0])
+        self.assertIn("process sampling failed", reasons[0])
+        # A valid, gate-passing report is still on hand: this is what
+        # keeps a run like this recorded as a real (if discarded) engine
+        # result rather than indistinguishable from an actual crash.
+        self.assertIsNotNone(gate)
+        self.assertTrue(gate["passed"])
+
 
 class DroppedFramesReportedTests(unittest.TestCase):
     def test_sentinel_is_false_not_a_number(self):
@@ -584,7 +627,13 @@ class MeasureOnceGuardedSamplingTests(unittest.TestCase):
              mock.patch.object(orchestrate, "_terminate_player") as terminate_mock:
             record = orchestrate.measure_once("aether", "h264-1080p.mp4", 0, {"cpuPowerMw": 100.0},
                                                orchestrate.ProtocolConfig(), {"aether": 0}, pathlib.Path("/tmp"))
-        terminate_mock.assert_called_once_with(fake_proc, "aether", wait_timeout=60)
+        # task-11: short and bounded, not the player's own DEFAULT_LINGER_SECONDS.
+        # The player is known to still be alive here by design (it lingers on
+        # purpose) with its report already on disk, so there is nothing to wait
+        # out; waiting the full linger here instead of signalling the player
+        # would silently reintroduce, per run, the wall-clock cost the linger
+        # fix exists to avoid.
+        terminate_mock.assert_called_once_with(fake_proc, "aether", wait_timeout=orchestrate.TERMINATE_GRACE_SECONDS)
         # No report file existed at that path, so this record is discarded
         # for that reason, but the player is still cleanly terminated.
         self.assertTrue(record["discarded"])
@@ -639,6 +688,47 @@ class MeasureOnceGuardedSamplingTests(unittest.TestCase):
         self.assertIn("This media format is not supported", record["discardReason"])
         self.assertEqual(record["launchAttempts"], 1)
         self.assertIsNone(record["process"])
+
+
+class LaunchTests(unittest.TestCase):
+    """task-11: --linger has to actually reach the command line for the
+    four Swift binaries (that is the whole fix), and must not be invented
+    for mpv, which has no such flag (see launch()'s own docstring)."""
+
+    def test_linger_is_passed_to_a_swift_binary(self):
+        with mock.patch.object(orchestrate, "demote", return_value=["sudo", "-u", "someone"]), \
+             mock.patch("subprocess.Popen") as popen_mock, \
+             mock.patch("builtins.open", mock.mock_open()):
+            orchestrate.launch("aether", "/fake/x.mp4", "/tmp/out.json",
+                                orchestrate.ProtocolConfig(linger=7.5), "/tmp/out.json.stderr.log")
+        args = popen_mock.call_args.args[0]
+        self.assertIn("--linger", args)
+        self.assertEqual(args[args.index("--linger") + 1], "7.5")
+
+    def test_default_protocol_config_lingers_by_default(self):
+        # The orchestrator must not silently opt out of the fix: a caller
+        # that does not think to pass --linger still gets
+        # DEFAULT_LINGER_SECONDS, not 0 (BenchArguments' own default,
+        # which exists only to keep direct/manual binary invocations
+        # backward compatible, not to be the orchestrator's default too).
+        with mock.patch.object(orchestrate, "demote", return_value=["sudo", "-u", "someone"]), \
+             mock.patch("subprocess.Popen") as popen_mock, \
+             mock.patch("builtins.open", mock.mock_open()):
+            orchestrate.launch("aether", "/fake/x.mp4", "/tmp/out.json",
+                                orchestrate.ProtocolConfig(), "/tmp/out.json.stderr.log")
+        args = popen_mock.call_args.args[0]
+        self.assertEqual(args[args.index("--linger") + 1], str(orchestrate.DEFAULT_LINGER_SECONDS))
+
+    def test_linger_is_not_passed_to_mpv(self):
+        # run-mpv.sh has no --linger flag at all; passing one would just
+        # be an argument it does not understand.
+        with mock.patch.object(orchestrate, "demote", return_value=["sudo", "-u", "someone"]), \
+             mock.patch("subprocess.Popen") as popen_mock, \
+             mock.patch("builtins.open", mock.mock_open()):
+            orchestrate.launch("mpv", "/fake/x.mp4", "/tmp/out.json",
+                                orchestrate.ProtocolConfig(linger=7.5), "/tmp/out.json.stderr.log")
+        args = popen_mock.call_args.args[0]
+        self.assertNotIn("--linger", args)
 
 
 class DemoteTests(unittest.TestCase):

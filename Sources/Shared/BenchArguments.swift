@@ -26,7 +26,7 @@ struct BenchArguments {
     }
 
     static let knownFlags: Set<String> = [
-        "backend", "url", "settle", "measure", "window", "display", "report",
+        "backend", "url", "settle", "measure", "window", "display", "report", "linger",
     ]
 
     let backend: BackendKind
@@ -36,6 +36,16 @@ struct BenchArguments {
     let windowSize: CGSize
     let displayIndex: Int
     let reportURL: URL
+    /// Seconds to keep playing, after the report is written, before exiting.
+    /// Defaults to 0 (exit immediately, the historical behavior). Exists so
+    /// the process under measurement outlives the orchestrator's sampler,
+    /// whose own window starts and ends a little later than this binary's
+    /// (process spawn, `sudo -u` privilege drop, first `ps` call): without a
+    /// margin, the sampler's last sample can land after this process has
+    /// already exited, discarding an otherwise-clean run. Never affects the
+    /// report: startedAt/endedAt are stamped and the report is written
+    /// before this linger begins.
+    let linger: TimeInterval
 
     static func parse(_ argv: [String]) throws -> BenchArguments {
         var flags: [String: String] = [:]
@@ -86,6 +96,7 @@ struct BenchArguments {
             measure: try seconds("measure", default: 60),
             windowSize: CGSize(width: parts[0], height: parts[1]),
             displayIndex: displayIndex,
-            reportURL: URL(fileURLWithPath: try need("report")))
+            reportURL: URL(fileURLWithPath: try need("report")),
+            linger: try seconds("linger", default: 0))
     }
 }

@@ -6,7 +6,7 @@ import Foundation
         "--backend", "vlckit", "--url", "/tmp/x.mkv",
         "--settle", "15", "--measure", "60",
         "--window", "1920x1080", "--display", "0",
-        "--report", "/tmp/out.json",
+        "--report", "/tmp/out.json", "--linger", "5",
     ])
     #expect(args.backend == .vlckit)
     #expect(args.url.path == "/tmp/x.mkv")
@@ -14,6 +14,14 @@ import Foundation
     #expect(args.measure == 60)
     #expect(args.windowSize == CGSize(width: 1920, height: 1080))
     #expect(args.reportURL.path == "/tmp/out.json")
+    #expect(args.linger == 5)
+}
+
+@Test func defaultsLingerToZeroWhenOmitted() throws {
+    let args = try BenchArguments.parse([
+        "--backend", "aether", "--url", "/tmp/x.mkv", "--report", "/tmp/o.json",
+    ])
+    #expect(args.linger == 0)
 }
 
 @Test func rejectsAnUnknownBackend() {
@@ -42,6 +50,18 @@ import Foundation
     // Zero and negative durations are not measurable.
     #expect(throws: BenchArguments.ParseError.self) {
         _ = try BenchArguments.parse(base + ["--settle", "0"])
+    }
+    // Zero, negative and non-numeric linger durations are all rejected too:
+    // this is the exact defect class BenchArguments.parse exists to catch,
+    // a malformed value must never silently fall back to "don't linger".
+    #expect(throws: BenchArguments.ParseError.self) {
+        _ = try BenchArguments.parse(base + ["--linger", "0"])
+    }
+    #expect(throws: BenchArguments.ParseError.self) {
+        _ = try BenchArguments.parse(base + ["--linger", "-1"])
+    }
+    #expect(throws: BenchArguments.ParseError.self) {
+        _ = try BenchArguments.parse(base + ["--linger", "abc"])
     }
     // A repeated flag is ambiguous, so it is an error rather than last-wins.
     #expect(throws: BenchArguments.ParseError.self) {

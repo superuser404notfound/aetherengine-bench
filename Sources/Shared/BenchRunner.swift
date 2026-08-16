@@ -58,6 +58,15 @@ final class BenchRunner {
                 startedAt: started, endedAt: ended,
                 servingPath: backend.servingPath)
             try JSONEncoder.bench.encode(report).write(to: arguments.reportURL)
+            // Report is written and started/endedAt are already fixed above;
+            // lingering here cannot change what was measured or reported. It
+            // exists purely so this process is still alive when the
+            // orchestrator's sampler (whose own window starts and ends a
+            // little later than this one, see BenchArguments.linger) takes
+            // its last sample.
+            if arguments.linger > 0 {
+                try await Task.sleep(for: .seconds(arguments.linger))
+            }
             backend.stop()
         } catch let error as BackendError {
             if case .unsupportedFormat(let reason) = error {
