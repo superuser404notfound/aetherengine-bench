@@ -37,8 +37,22 @@ pretty:
   number would mislead more than inform. The method note that explains
   this cites the actual observed spread for the fixture being rendered
   (see _cpu_power_spread_evidence), not an unbacked assertion.
+- A run discarded for nothing but a negative CPU power reading is valid
+  for the columns this table still publishes: the discard rule that
+  flagged it checks a metric nobody sees any more. Rehabilitated
+  narrowly, see _rehabilitate_cpu_power_only_discard; a run whose GPU
+  power (a published column) was also physically impossible, or that
+  failed for any other reason at all, stays fully discarded. Whatever
+  discard reason a reader does see is stripped of the raw arithmetic
+  (_humanize_discard_reason): a published table names which field was
+  wrong, Results/ has the numbers.
+- The default fixture is hevc-4k-hdr10.mkv, the headline, because media
+  servers serve MKV; hevc-4k-hdr10.mp4 is rendered as its named second
+  block, never as what a bare `render-table.py Results/foo.json`
+  produces.
 """
 import json
+import re
 import statistics
 import sys
 
@@ -77,6 +91,64 @@ def _unique(items):
     return seen
 
 
+# negative_power_reason() in Scripts/orchestrate.py joins every *Mw field
+# that subtracted to a negative value with "; " inside one parenthesised
+# reason; evaluate_run() then joins that reason with any other discard
+# reason (thermal, frame gate, a crash, ...) using the very same "; ". A
+# run whose entire discardReason is this pattern, with cpuPowerMw as the
+# ONLY offending field, was discarded for a reason that no longer applies
+# to anything this table publishes (see _rehabilitate_cpu_power_only_
+# discard); anything else, a second offending field or a second reason
+# riding along, must not match, since a run whose gpuPowerMw was also
+# physically impossible (a column still published) has to stay discarded.
+_CPU_POWER_ONLY_NEGATIVE_RE = re.compile(
+    r"^physically impossible negative power after baseline subtraction \(cpuPowerMw = raw .+ mW\)$")
+
+# The raw arithmetic negative_power_reason() prints ("cpuPowerMw = raw
+# 68.86666666666666 - baseline 79.55 = -10.7 mW") is precise on purpose,
+# for Results/. It has no place in a table meant for a reader: this keeps
+# which field(s) went negative and drops the numbers, which are still in
+# the committed session file for anyone who wants them.
+_NEGATIVE_POWER_ARITHMETIC_RE = re.compile(
+    r"\w+ = raw -?[\d.]+ - baseline -?[\d.]+ = -?[\d.]+ mW")
+
+
+def _is_cpu_power_only_negative_discard(reason):
+    if not reason or "; " in reason:
+        return False
+    return bool(_CPU_POWER_ONLY_NEGATIVE_RE.match(reason))
+
+
+def _humanize_discard_reason(reason):
+    if not reason:
+        return reason
+    return _NEGATIVE_POWER_ARITHMETIC_RE.sub(lambda m: m.group(0).split(" = raw ")[0], reason)
+
+
+def _rehabilitate_cpu_power_only_discard(run):
+    """A run discarded only because its CPU package power went negative
+    after baseline subtraction is not a bad measurement for anything this
+    renderer still publishes. GPU power, CPU load (process.cpuPercentMean)
+    and RSS are sampled independently of the power-subtraction check that
+    flagged it, and the table has no CPU power column for that check to
+    matter to any more (see the module docstring). Rehabilitated to valid
+    for every other field, with its own cpuPowerMw blanked to None so a
+    physically impossible, discarded reading never feeds
+    _cpu_power_spread_evidence: a value the run itself was thrown out for
+    is not a real data point about how noisy CPU power is.
+
+    Narrow on purpose: see _is_cpu_power_only_negative_discard for exactly
+    which runs qualify. Anything else, frame gate, thermal, a crash, a
+    missing report, a second offending field, is untouched and stays
+    discarded for every column.
+    """
+    if not run.get("discarded") or not _is_cpu_power_only_negative_discard(run.get("discardReason")):
+        return run
+    power = dict(run.get("power") or {})
+    power["cpuPowerMw"] = None
+    return {**run, "discarded": False, "power": power}
+
+
 def summarize(runs):
     """Groups runs by (backend, fixture) and reduces each group to the
     figures the table needs: the median over valid (non-discarded) runs
@@ -95,13 +167,13 @@ def summarize(runs):
 
 
 def _finalize_cell(cell):
-    all_runs = cell.pop("_runs")
+    all_runs = [_rehabilitate_cpu_power_only_discard(r) for r in cell.pop("_runs")]
     valid = [r for r in all_runs if not r.get("discarded")]
     discarded = [r for r in all_runs if r.get("discarded")]
 
     cell["totalRuns"] = len(all_runs)
     cell["discardedCount"] = len(discarded)
-    cell["discardedReasons"] = _unique(r.get("discardReason") for r in discarded)
+    cell["discardedReasons"] = _unique(_humanize_discard_reason(r.get("discardReason")) for r in discarded)
 
     if not valid:
         cell["valid"] = False
@@ -323,7 +395,7 @@ def _cpu_power_limitation_note(table, fixture):
     )
 
 
-def render(results, fixture="hevc-4k-hdr10.mp4"):
+def render(results, fixture="hevc-4k-hdr10.mkv"):
     table = summarize(results.get("runs", []))
     protocol = results.get("protocol") or {}
     measure_s = protocol.get("measure")

@@ -8,11 +8,11 @@
     "max_launch_attempts": 5, "gate_threshold": 0.95
   },
   "launchFailures": {
-    "aether": {"hevc-4k-hdr10.mp4": 0},
-    "avplayer": {"hevc-4k-hdr10.mp4": 0},
-    "vlckit": {"hevc-4k-hdr10.mp4": 1},
-    "ksplayer": {"hevc-4k-hdr10.mp4": 1, "h264-1080p.mp4": 0, "av1-10bit.mkv": 15},
-    "mpv": {"hevc-4k-hdr10.mp4": 0}
+    "aether": {"hevc-4k-hdr10.mkv": 0},
+    "avplayer": {"hevc-4k-hdr10.mkv": 0},
+    "vlckit": {"hevc-4k-hdr10.mkv": 1},
+    "ksplayer": {"hevc-4k-hdr10.mkv": 1, "h264-1080p.mp4": 0, "av1-10bit.mkv": 15},
+    "mpv": {"hevc-4k-hdr10.mkv": 0}
   },
   "versions": {
     "aether": "6.26.0", "avplayer": "macOS 26.5.2", "vlckit": "4.0.0-alpha.21",
@@ -20,7 +20,7 @@
   },
   "runs": [
     {
-      "backend": "aether", "fixture": "hevc-4k-hdr10.mp4", "repeat": 0, "launchAttempts": 1,
+      "backend": "aether", "fixture": "hevc-4k-hdr10.mkv", "repeat": 0, "launchAttempts": 1,
       "discarded": false, "discardReason": "",
       "power": {"cpuPowerMw": 1400, "gpuPowerMw": 800, "anePowerMw": 0,
                 "eClusterResidency": 40.0, "pClusterResidency": 10.0,
@@ -28,14 +28,14 @@
       "process": {"cpuPercentMean": 38.0, "cpuPercentMax": 44.0, "rssMbMean": 210.0, "rssMbPeak": 260.0},
       "droppedFramesReported": true,
       "report": {
-        "backend": "aether", "fixture": "hevc-4k-hdr10.mp4", "engineVersion": "6.26.0",
+        "backend": "aether", "fixture": "hevc-4k-hdr10.mkv", "engineVersion": "6.26.0",
         "deliveredFrames": 1441, "droppedFrames": 0, "expectedFrames": 1440, "servingPath": null,
         "output": {"width": 3840, "height": 1714, "bitDepth": 10, "colorTransfer": "SMPTE_ST_2084_PQ", "audioChannels": 2},
         "startedAt": "2026-08-20T10:15:15Z", "endedAt": "2026-08-20T10:16:15Z"
       }
     },
     {
-      "backend": "aether", "fixture": "hevc-4k-hdr10.mp4", "repeat": 1, "launchAttempts": 1,
+      "backend": "aether", "fixture": "hevc-4k-hdr10.mkv", "repeat": 1, "launchAttempts": 1,
       "discarded": false, "discardReason": "",
       "power": {"cpuPowerMw": 1410, "gpuPowerMw": 800, "anePowerMw": 0,
                 "eClusterResidency": 40.0, "pClusterResidency": 10.0,
@@ -43,14 +43,14 @@
       "process": {"cpuPercentMean": 38.4, "cpuPercentMax": 44.2, "rssMbMean": 211.0, "rssMbPeak": 261.0},
       "droppedFramesReported": true,
       "report": {
-        "backend": "aether", "fixture": "hevc-4k-hdr10.mp4", "engineVersion": "6.26.0",
+        "backend": "aether", "fixture": "hevc-4k-hdr10.mkv", "engineVersion": "6.26.0",
         "deliveredFrames": 1440, "droppedFrames": 0, "expectedFrames": 1440, "servingPath": null,
         "output": {"width": 3840, "height": 1714, "bitDepth": 10, "colorTransfer": "SMPTE_ST_2084_PQ", "audioChannels": 2},
         "startedAt": "2026-08-20T10:18:15Z", "endedAt": "2026-08-20T10:19:15Z"
       }
     },
     {
-      "backend": "aether", "fixture": "hevc-4k-hdr10.mp4", "repeat": 2, "launchAttempts": 1,
+      "backend": "aether", "fixture": "hevc-4k-hdr10.mkv", "repeat": 2, "launchAttempts": 1,
       "discarded": false, "discardReason": "",
       "power": {"cpuPowerMw": 1420, "gpuPowerMw": 800, "anePowerMw": 0,
                 "eClusterResidency": 40.0, "pClusterResidency": 10.0,
@@ -58,7 +58,7 @@
       "process": {"cpuPercentMean": 38.1, "cpuPercentMax": 44.0, "rssMbMean": 209.0, "rssMbPeak": 259.0},
       "droppedFramesReported": true,
       "report": {
-        "backend": "aether", "fixture": "hevc-4k-hdr10.mp4", "engineVersion": "6.26.0",
+        "backend": "aether", "fixture": "hevc-4k-hdr10.mkv", "engineVersion": "6.26.0",
         "deliveredFrames": 1439, "droppedFrames": 0, "expectedFrames": 1440, "servingPath": null,
         "output": {"width": 3840, "height": 1714, "bitDepth": 10, "colorTransfer": "SMPTE_ST_2084_PQ", "audioChannels": 2},
         "startedAt": "2026-08-20T10:21:15Z", "endedAt": "2026-08-20T10:22:15Z"
@@ -66,7 +66,7 @@
     },
 
     {
-      "backend": "ksplayer", "fixture": "hevc-4k-hdr10.mp4", "repeat": 0, "launchAttempts": 1,
+      "backend": "ksplayer", "fixture": "hevc-4k-hdr10.mkv", "repeat": 0, "launchAttempts": 1,
       "discarded": false, "discardReason": "",
       "power": {"cpuPowerMw": 1640, "gpuPowerMw": 750, "anePowerMw": 0,
                 "eClusterResidency": 30.0, "pClusterResidency": 25.0,
@@ -74,14 +74,14 @@
       "process": {"cpuPercentMean": 45.0, "cpuPercentMax": 52.0, "rssMbMean": 300.0, "rssMbPeak": 340.0},
       "droppedFramesReported": true,
       "report": {
-        "backend": "ksplayer", "fixture": "hevc-4k-hdr10.mp4", "engineVersion": "KSPlayer 2.3.4 (free GPL build)",
+        "backend": "ksplayer", "fixture": "hevc-4k-hdr10.mkv", "engineVersion": "KSPlayer 2.3.4 (free GPL build)",
         "deliveredFrames": 1441, "droppedFrames": 0, "expectedFrames": 1440, "servingPath": "KSMEPlayer",
         "output": {"width": 3840, "height": 1714, "bitDepth": 10, "colorTransfer": "SMPTE_ST_2084_PQ", "audioChannels": 2},
         "startedAt": "2026-08-20T10:15:15Z", "endedAt": "2026-08-20T10:16:15Z"
       }
     },
     {
-      "backend": "ksplayer", "fixture": "hevc-4k-hdr10.mp4", "repeat": 1, "launchAttempts": 2,
+      "backend": "ksplayer", "fixture": "hevc-4k-hdr10.mkv", "repeat": 1, "launchAttempts": 2,
       "discarded": false, "discardReason": "",
       "power": {"cpuPowerMw": 1650, "gpuPowerMw": 750, "anePowerMw": 0,
                 "eClusterResidency": 30.0, "pClusterResidency": 25.0,
@@ -89,14 +89,14 @@
       "process": {"cpuPercentMean": 45.6, "cpuPercentMax": 53.0, "rssMbMean": 301.0, "rssMbPeak": 341.0},
       "droppedFramesReported": true,
       "report": {
-        "backend": "ksplayer", "fixture": "hevc-4k-hdr10.mp4", "engineVersion": "KSPlayer 2.3.4 (free GPL build)",
+        "backend": "ksplayer", "fixture": "hevc-4k-hdr10.mkv", "engineVersion": "KSPlayer 2.3.4 (free GPL build)",
         "deliveredFrames": 1440, "droppedFrames": 0, "expectedFrames": 1440, "servingPath": "KSMEPlayer",
         "output": {"width": 3840, "height": 1714, "bitDepth": 10, "colorTransfer": "SMPTE_ST_2084_PQ", "audioChannels": 2},
         "startedAt": "2026-08-20T10:18:15Z", "endedAt": "2026-08-20T10:19:15Z"
       }
     },
     {
-      "backend": "ksplayer", "fixture": "hevc-4k-hdr10.mp4", "repeat": 2, "launchAttempts": 1,
+      "backend": "ksplayer", "fixture": "hevc-4k-hdr10.mkv", "repeat": 2, "launchAttempts": 1,
       "discarded": false, "discardReason": "",
       "power": {"cpuPowerMw": 1630, "gpuPowerMw": 750, "anePowerMw": 0,
                 "eClusterResidency": 30.0, "pClusterResidency": 25.0,
@@ -104,7 +104,7 @@
       "process": {"cpuPercentMean": 44.9, "cpuPercentMax": 52.5, "rssMbMean": 299.0, "rssMbPeak": 339.0},
       "droppedFramesReported": true,
       "report": {
-        "backend": "ksplayer", "fixture": "hevc-4k-hdr10.mp4", "engineVersion": "KSPlayer 2.3.4 (free GPL build)",
+        "backend": "ksplayer", "fixture": "hevc-4k-hdr10.mkv", "engineVersion": "KSPlayer 2.3.4 (free GPL build)",
         "deliveredFrames": 1442, "droppedFrames": 0, "expectedFrames": 1440, "servingPath": "KSMEPlayer",
         "output": {"width": 3840, "height": 1714, "bitDepth": 10, "colorTransfer": "SMPTE_ST_2084_PQ", "audioChannels": 2},
         "startedAt": "2026-08-20T10:21:15Z", "endedAt": "2026-08-20T10:22:15Z"
@@ -112,7 +112,7 @@
     },
 
     {
-      "backend": "avplayer", "fixture": "hevc-4k-hdr10.mp4", "repeat": 0, "launchAttempts": 1,
+      "backend": "avplayer", "fixture": "hevc-4k-hdr10.mkv", "repeat": 0, "launchAttempts": 1,
       "discarded": false, "discardReason": "",
       "power": {"cpuPowerMw": 900, "gpuPowerMw": 700, "anePowerMw": 0,
                 "eClusterResidency": 25.0, "pClusterResidency": 8.0,
@@ -120,14 +120,14 @@
       "process": {"cpuPercentMean": 20.0, "cpuPercentMax": 25.0, "rssMbMean": 95.0, "rssMbPeak": 100.0},
       "droppedFramesReported": true,
       "report": {
-        "backend": "avplayer", "fixture": "hevc-4k-hdr10.mp4", "engineVersion": "Version 26.5.2 (Build 25F84)",
+        "backend": "avplayer", "fixture": "hevc-4k-hdr10.mkv", "engineVersion": "Version 26.5.2 (Build 25F84)",
         "deliveredFrames": 1440, "droppedFrames": 0, "expectedFrames": 1440, "servingPath": null,
         "output": {"width": 3840, "height": 1714, "bitDepth": 8, "colorTransfer": "unknown", "audioChannels": 2},
         "startedAt": "2026-08-20T10:15:15Z", "endedAt": "2026-08-20T10:16:15Z"
       }
     },
     {
-      "backend": "avplayer", "fixture": "hevc-4k-hdr10.mp4", "repeat": 1, "launchAttempts": 1,
+      "backend": "avplayer", "fixture": "hevc-4k-hdr10.mkv", "repeat": 1, "launchAttempts": 1,
       "discarded": false, "discardReason": "",
       "power": {"cpuPowerMw": 905, "gpuPowerMw": 700, "anePowerMw": 0,
                 "eClusterResidency": 25.0, "pClusterResidency": 8.0,
@@ -135,14 +135,14 @@
       "process": {"cpuPercentMean": 20.4, "cpuPercentMax": 25.4, "rssMbMean": 96.0, "rssMbPeak": 101.0},
       "droppedFramesReported": true,
       "report": {
-        "backend": "avplayer", "fixture": "hevc-4k-hdr10.mp4", "engineVersion": "Version 26.5.2 (Build 25F84)",
+        "backend": "avplayer", "fixture": "hevc-4k-hdr10.mkv", "engineVersion": "Version 26.5.2 (Build 25F84)",
         "deliveredFrames": 1441, "droppedFrames": 0, "expectedFrames": 1440, "servingPath": null,
         "output": {"width": 3840, "height": 1714, "bitDepth": 8, "colorTransfer": "unknown", "audioChannels": 2},
         "startedAt": "2026-08-20T10:18:15Z", "endedAt": "2026-08-20T10:19:15Z"
       }
     },
     {
-      "backend": "avplayer", "fixture": "hevc-4k-hdr10.mp4", "repeat": 2, "launchAttempts": 1,
+      "backend": "avplayer", "fixture": "hevc-4k-hdr10.mkv", "repeat": 2, "launchAttempts": 1,
       "discarded": false, "discardReason": "",
       "power": {"cpuPowerMw": 895, "gpuPowerMw": 700, "anePowerMw": 0,
                 "eClusterResidency": 25.0, "pClusterResidency": 8.0,
@@ -150,7 +150,7 @@
       "process": {"cpuPercentMean": 19.8, "cpuPercentMax": 24.9, "rssMbMean": 94.0, "rssMbPeak": 99.0},
       "droppedFramesReported": true,
       "report": {
-        "backend": "avplayer", "fixture": "hevc-4k-hdr10.mp4", "engineVersion": "Version 26.5.2 (Build 25F84)",
+        "backend": "avplayer", "fixture": "hevc-4k-hdr10.mkv", "engineVersion": "Version 26.5.2 (Build 25F84)",
         "deliveredFrames": 1440, "droppedFrames": 0, "expectedFrames": 1440, "servingPath": null,
         "output": {"width": 3840, "height": 1714, "bitDepth": 8, "colorTransfer": "unknown", "audioChannels": 2},
         "startedAt": "2026-08-20T10:21:15Z", "endedAt": "2026-08-20T10:22:15Z"
@@ -158,7 +158,7 @@
     },
 
     {
-      "backend": "vlckit", "fixture": "hevc-4k-hdr10.mp4", "repeat": 0, "launchAttempts": 1,
+      "backend": "vlckit", "fixture": "hevc-4k-hdr10.mkv", "repeat": 0, "launchAttempts": 1,
       "discarded": false, "discardReason": "",
       "power": {"cpuPowerMw": 2200, "gpuPowerMw": 900, "anePowerMw": 0,
                 "eClusterResidency": 20.0, "pClusterResidency": 35.0,
@@ -166,14 +166,14 @@
       "process": {"cpuPercentMean": 55.0, "cpuPercentMax": 61.0, "rssMbMean": 150.0, "rssMbPeak": 160.0},
       "droppedFramesReported": true,
       "report": {
-        "backend": "vlckit", "fixture": "hevc-4k-hdr10.mp4", "engineVersion": "4.0.0-alpha.21",
+        "backend": "vlckit", "fixture": "hevc-4k-hdr10.mkv", "engineVersion": "4.0.0-alpha.21",
         "deliveredFrames": 1443, "droppedFrames": 0, "expectedFrames": 1440, "servingPath": null,
         "output": {"width": 3840, "height": 1714, "bitDepth": 0, "colorTransfer": "unreported", "audioChannels": 2},
         "startedAt": "2026-08-20T10:15:15Z", "endedAt": "2026-08-20T10:16:15Z"
       }
     },
     {
-      "backend": "vlckit", "fixture": "hevc-4k-hdr10.mp4", "repeat": 1, "launchAttempts": 1,
+      "backend": "vlckit", "fixture": "hevc-4k-hdr10.mkv", "repeat": 1, "launchAttempts": 1,
       "discarded": false, "discardReason": "",
       "power": {"cpuPowerMw": 2210, "gpuPowerMw": 900, "anePowerMw": 0,
                 "eClusterResidency": 20.0, "pClusterResidency": 35.0,
@@ -181,14 +181,14 @@
       "process": {"cpuPercentMean": 55.4, "cpuPercentMax": 61.5, "rssMbMean": 151.0, "rssMbPeak": 161.0},
       "droppedFramesReported": true,
       "report": {
-        "backend": "vlckit", "fixture": "hevc-4k-hdr10.mp4", "engineVersion": "4.0.0-alpha.21",
+        "backend": "vlckit", "fixture": "hevc-4k-hdr10.mkv", "engineVersion": "4.0.0-alpha.21",
         "deliveredFrames": 1442, "droppedFrames": 1, "expectedFrames": 1440, "servingPath": null,
         "output": {"width": 3840, "height": 1714, "bitDepth": 0, "colorTransfer": "unreported", "audioChannels": 2},
         "startedAt": "2026-08-20T10:18:15Z", "endedAt": "2026-08-20T10:19:15Z"
       }
     },
     {
-      "backend": "vlckit", "fixture": "hevc-4k-hdr10.mp4", "repeat": 2, "launchAttempts": 2,
+      "backend": "vlckit", "fixture": "hevc-4k-hdr10.mkv", "repeat": 2, "launchAttempts": 2,
       "discarded": false, "discardReason": "",
       "power": {"cpuPowerMw": 2190, "gpuPowerMw": 900, "anePowerMw": 0,
                 "eClusterResidency": 20.0, "pClusterResidency": 35.0,
@@ -196,7 +196,7 @@
       "process": {"cpuPercentMean": 54.6, "cpuPercentMax": 60.8, "rssMbMean": 149.0, "rssMbPeak": 159.0},
       "droppedFramesReported": true,
       "report": {
-        "backend": "vlckit", "fixture": "hevc-4k-hdr10.mp4", "engineVersion": "4.0.0-alpha.21",
+        "backend": "vlckit", "fixture": "hevc-4k-hdr10.mkv", "engineVersion": "4.0.0-alpha.21",
         "deliveredFrames": 1441, "droppedFrames": 0, "expectedFrames": 1440, "servingPath": null,
         "output": {"width": 3840, "height": 1714, "bitDepth": 0, "colorTransfer": "unreported", "audioChannels": 2},
         "startedAt": "2026-08-20T10:21:15Z", "endedAt": "2026-08-20T10:22:15Z"
@@ -204,7 +204,7 @@
     },
 
     {
-      "backend": "mpv", "fixture": "hevc-4k-hdr10.mp4", "repeat": 0, "launchAttempts": 1,
+      "backend": "mpv", "fixture": "hevc-4k-hdr10.mkv", "repeat": 0, "launchAttempts": 1,
       "discarded": true,
       "discardReason": "SoC reported throttling during the window (level=Moderate)",
       "power": {"cpuPowerMw": 3050, "gpuPowerMw": 860, "anePowerMw": 0,
@@ -214,7 +214,7 @@
       "droppedFramesReported": true,
       "frameGate": {"passed": true, "ratio": 1.01},
       "report": {
-        "backend": "mpv", "fixture": "hevc-4k-hdr10.mp4",
+        "backend": "mpv", "fixture": "hevc-4k-hdr10.mkv",
         "engineVersion": "mpv v0.41.0 Copyright (c) 2000-2025 mpv/MPlayer/mplayer2 projects",
         "deliveredFrames": 1455, "droppedFrames": 3, "expectedFrames": 1440, "servingPath": null,
         "output": {"width": 3840, "height": 1714, "bitDepth": 10, "colorTransfer": "pq", "audioChannels": 2},
@@ -222,7 +222,7 @@
       }
     },
     {
-      "backend": "mpv", "fixture": "hevc-4k-hdr10.mp4", "repeat": 1, "launchAttempts": 1,
+      "backend": "mpv", "fixture": "hevc-4k-hdr10.mkv", "repeat": 1, "launchAttempts": 1,
       "discarded": false, "discardReason": "",
       "power": {"cpuPowerMw": 3000, "gpuPowerMw": 850, "anePowerMw": 0,
                 "eClusterResidency": 15.0, "pClusterResidency": 55.0,
@@ -230,7 +230,7 @@
       "process": {"cpuPercentMean": 80.0, "cpuPercentMax": 90.0, "rssMbMean": 380.0, "rssMbPeak": 400.0},
       "droppedFramesReported": true,
       "report": {
-        "backend": "mpv", "fixture": "hevc-4k-hdr10.mp4",
+        "backend": "mpv", "fixture": "hevc-4k-hdr10.mkv",
         "engineVersion": "mpv v0.41.0 Copyright (c) 2000-2025 mpv/MPlayer/mplayer2 projects",
         "deliveredFrames": 1444, "droppedFrames": 2, "expectedFrames": 1440, "servingPath": null,
         "output": {"width": 3840, "height": 1714, "bitDepth": 10, "colorTransfer": "pq", "audioChannels": 2},
@@ -238,7 +238,7 @@
       }
     },
     {
-      "backend": "mpv", "fixture": "hevc-4k-hdr10.mp4", "repeat": 2, "launchAttempts": 1,
+      "backend": "mpv", "fixture": "hevc-4k-hdr10.mkv", "repeat": 2, "launchAttempts": 1,
       "discarded": false, "discardReason": "",
       "power": {"cpuPowerMw": 3010, "gpuPowerMw": 850, "anePowerMw": 0,
                 "eClusterResidency": 15.0, "pClusterResidency": 55.0,
@@ -246,7 +246,7 @@
       "process": {"cpuPercentMean": 79.5, "cpuPercentMax": 89.0, "rssMbMean": 379.0, "rssMbPeak": 399.0},
       "droppedFramesReported": true,
       "report": {
-        "backend": "mpv", "fixture": "hevc-4k-hdr10.mp4",
+        "backend": "mpv", "fixture": "hevc-4k-hdr10.mkv",
         "engineVersion": "mpv v0.41.0 Copyright (c) 2000-2025 mpv/MPlayer/mplayer2 projects",
         "deliveredFrames": 1443, "droppedFrames": 1, "expectedFrames": 1440, "servingPath": null,
         "output": {"width": 3840, "height": 1714, "bitDepth": 10, "colorTransfer": "pq", "audioChannels": 2},
