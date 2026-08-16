@@ -46,8 +46,9 @@ ffmpeg -y -i hevc-4k-hdr10-video.mp4 $CUT -i "$A" -map 0:v -map 1:a -c:v copy \
 
 # 2b. HEVC 4K 10-bit HDR10 in Matroska container. Remux from MP4 with no
 #     re-encode: same streams, different container. This is the case media
-#     servers overwhelmingly serve; AVPlayer cannot open MKV at all, and
-#     KSPlayer's free build gates MKV behind a paid tier.
+#     servers overwhelmingly serve, and AVPlayer cannot open MKV at all.
+#     KSPlayer's free build does play it, measured, so its own feature matrix
+#     gating AV1 and the full decoder set does not extend to Matroska.
 ffmpeg -y -i hevc-4k-hdr10.mp4 -c:v copy -c:a copy hevc-4k-hdr10.mkv
 
 # 3. AV1 10-bit in MKV. No hardware AV1 on M1, so this is the software race.
