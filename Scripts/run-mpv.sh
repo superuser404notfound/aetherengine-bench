@@ -197,7 +197,7 @@ DROPS_END=$(ask frame-drop-count); require "$DROPS_END" frame-drop-count
 RENDER_PX="${OSD_W}x${OSD_H}" python3 - "$REPORT" "$WIDTH" "$HEIGHT" "$FPS" "$HWDEC_CURRENT" "$PIXFMT" "$HW_PIXFMT" \
          "$GAMMA" "$CHANNELS" "$PT_START" "$DROPS_START" "$PT_END" "$DROPS_END" "$MEASURE" \
          "$STARTED" "$ENDED" "$(basename "$URL")" "$VERSION" <<'PY'
-import json, re, sys, time
+import json, os, re, sys, time
 
 (report, w, h, fps, hwdec_current, pixfmt, hw_pixfmt, gamma, channels,
  pt_start, drops_start, pt_end, drops_end, measure,

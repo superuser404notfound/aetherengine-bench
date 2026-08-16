@@ -11,3 +11,4 @@ Fixtures/master/
 Fixtures/*.mp4
 Fixtures/*.mkv
 Fixtures/*.webm
+nohup.out
