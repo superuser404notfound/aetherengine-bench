@@ -110,9 +110,11 @@ MAX_BASELINE_CPU_MW = 250.0
 # a still-declining trend as if they were a plateau.
 BASELINE_STABILITY_TOLERANCE_MW = 50.0
 
-# How long each of the four Swift binaries keeps playing, after writing its
-# report, before exiting (Sources/Shared/BenchArguments.swift's --linger).
-# Exists because the sampler's own window starts and ends slightly later
+# How long each player keeps playing, after writing its report, before
+# exiting (Sources/Shared/BenchArguments.swift's --linger for the four
+# Swift binaries; Scripts/run-mpv.sh's own same-named shell constant and
+# fifth positional argument for mpv). Exists because the sampler's own
+# window starts and ends slightly later
 # than the player's own settle+measure window (process spawn, `sudo -u`
 # privilege drop, and the sampler's first `ps` call all cost time the
 # player's side does not pay), and without margin the sampler's last
@@ -562,15 +564,16 @@ def launch(backend, fixture_path, report_path, cfg, stderr_path):
     inherits a dup of the fd at exec time, so closing this process's own
     copy right after does not affect it.
 
-    --linger is passed to the four Swift binaries only (see
-    DEFAULT_LINGER_SECONDS): mpv has no equivalent flag, run-mpv.sh is out
-    of scope for task-11's fix, a known follow-up if the same discard ever
-    shows up under mpv.
+    cfg.linger (see DEFAULT_LINGER_SECONDS) reaches every backend, mpv
+    included: run-mpv.sh takes it as a fifth positional argument, its own
+    DEFAULT_LINGER_SECONDS shell constant (same name, same value) only
+    ever standing in when the script is run directly, not through here.
     """
     with open(stderr_path, "w") as stderr_file:
         if backend == "mpv":
             return subprocess.Popen(demote() + [str(ROOT / "Scripts/run-mpv.sh"), fixture_path,
-                                                 str(cfg.settle), str(cfg.measure), report_path],
+                                                 str(cfg.settle), str(cfg.measure), report_path,
+                                                 str(cfg.linger)],
                                      stderr=stderr_file)
         return subprocess.Popen(demote() + [str(BINARIES[backend]), "--backend", backend, "--url", fixture_path,
                                              "--settle", str(cfg.settle), "--measure", str(cfg.measure),
@@ -976,8 +979,8 @@ def main():
     parser.add_argument("--max-launch-attempts", type=int, default=DEFAULT_MAX_LAUNCH_ATTEMPTS)
     parser.add_argument("--gate-threshold", type=float, default=DEFAULT_GATE_THRESHOLD)
     parser.add_argument("--linger", type=float, default=DEFAULT_LINGER_SECONDS,
-                         help="seconds the four Swift binaries keep playing after writing "
-                              "their report, so this machine's sudo -u/sampler startup lag "
+                         help="seconds every player (all four Swift binaries and mpv) keeps "
+                              "playing after writing its report, so this machine's sudo -u/sampler startup lag "
                               "never races the player's own exit (see DEFAULT_LINGER_SECONDS)")
     parser.add_argument("--fixtures", type=str, default=",".join(DEFAULT_FIXTURES),
                          help="comma-separated fixture filenames under Fixtures/")

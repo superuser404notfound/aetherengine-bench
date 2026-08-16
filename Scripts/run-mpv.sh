@@ -7,13 +7,28 @@
 # Timing and delta semantics mirror Sources/Shared/BenchRunner.swift: settle,
 # then stamp startedAt and snapshot counters, then measure, then stamp
 # endedAt and snapshot counters again, reporting deltas over the measurement
-# window only.
+# window only, then linger (see LINGER below) before mpv is allowed to exit.
 set -euo pipefail
 
-URL="${1:?usage: run-mpv.sh <file> [settle=15] [measure=60] [report=/tmp/mpv.json]}"
+# Same value, same name, as Scripts/orchestrate.py's DEFAULT_LINGER_SECONDS
+# and Sources/Shared/BenchArguments.swift's --linger default (there, 0; the
+# Swift binaries are only ever run standalone through tests or a direct
+# manual invocation, so their default stays a no-op). This script has no
+# such test suite depending on an instant exit, and orchestrate.py's own
+# launch() always passes --linger's shell equivalent explicitly (see below),
+# so defaulting this one to the real protective value closes the same edge
+# for any direct/manual invocation too, not just orchestrated ones. Nothing
+# short of both files agreeing by convention can keep two literals in two
+# different languages from drifting apart, so both are named identically
+# and each points at the other; a mismatch here is a bug in this comment,
+# not a config the code will discover for you.
+DEFAULT_LINGER_SECONDS=5
+
+URL="${1:?usage: run-mpv.sh <file> [settle=15] [measure=60] [report=/tmp/mpv.json] [linger=$DEFAULT_LINGER_SECONDS]}"
 SETTLE="${2:-15}"
 MEASURE="${3:-60}"
 REPORT="${4:-/tmp/mpv.json}"
+LINGER="${5:-$DEFAULT_LINGER_SECONDS}"
 [ -f "$URL" ] || { echo "run-mpv.sh: no such file: $URL" >&2; exit 1; }
 
 # Fixed window on a fixed display, matching BenchWindow.swift's default
@@ -259,3 +274,19 @@ with open(report, "w") as f:
 PY
 
 echo "run-mpv.sh: wrote $REPORT"
+
+# STARTED/ENDED and the report are already fixed above; lingering here
+# cannot change what was measured or reported. It exists purely so this
+# script (and mpv, backgrounded under it) is still alive when the
+# orchestrator's sampler takes its last sample: the sampler's own window
+# starts and ends slightly later than this script's (process spawn, sudo -u
+# privilege drop, the sampler's first `ps` call all cost time this side
+# does not pay), and without margin the sampler's last sample can land
+# after mpv has already exited, discarding an otherwise-clean run (the
+# same defect Sources/Shared/BenchRunner.swift's own --linger exists for).
+# The orchestrator terminates this script the moment its own sampling
+# window closes (see orchestrate.py's TERMINATE_GRACE_SECONDS) rather than
+# waiting this sleep out, so it costs no wall-clock time in the common
+# case; the `cleanup` EXIT trap above fires on that termination exactly as
+# it does on a normal, un-terminated exit, killing mpv either way.
+sleep "$LINGER"

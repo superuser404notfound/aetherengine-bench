@@ -691,9 +691,10 @@ class MeasureOnceGuardedSamplingTests(unittest.TestCase):
 
 
 class LaunchTests(unittest.TestCase):
-    """task-11: --linger has to actually reach the command line for the
-    four Swift binaries (that is the whole fix), and must not be invented
-    for mpv, which has no such flag (see launch()'s own docstring)."""
+    """task-11: cfg.linger has to actually reach the command line for
+    every backend (that is the whole fix), the four Swift binaries via
+    --linger and mpv via run-mpv.sh's fifth positional argument (its own
+    flag-free argument style, see launch()'s own docstring)."""
 
     def test_linger_is_passed_to_a_swift_binary(self):
         with mock.patch.object(orchestrate, "demote", return_value=["sudo", "-u", "someone"]), \
@@ -719,16 +720,30 @@ class LaunchTests(unittest.TestCase):
         args = popen_mock.call_args.args[0]
         self.assertEqual(args[args.index("--linger") + 1], str(orchestrate.DEFAULT_LINGER_SECONDS))
 
-    def test_linger_is_not_passed_to_mpv(self):
-        # run-mpv.sh has no --linger flag at all; passing one would just
-        # be an argument it does not understand.
+    def test_linger_reaches_mpv_as_its_fifth_positional_argument(self):
+        # run-mpv.sh has no --linger flag (it takes plain positional
+        # arguments throughout: file, settle, measure, report), so cfg.linger
+        # has to land as the fifth positional, right after report_path, or
+        # mpv keeps racing the sampler exactly as the Swift binaries did.
         with mock.patch.object(orchestrate, "demote", return_value=["sudo", "-u", "someone"]), \
              mock.patch("subprocess.Popen") as popen_mock, \
              mock.patch("builtins.open", mock.mock_open()):
             orchestrate.launch("mpv", "/fake/x.mp4", "/tmp/out.json",
                                 orchestrate.ProtocolConfig(linger=7.5), "/tmp/out.json.stderr.log")
         args = popen_mock.call_args.args[0]
-        self.assertNotIn("--linger", args)
+        # run-mpv.sh <file> <settle> <measure> <report> <linger>: linger is
+        # the last argument, immediately after report_path.
+        self.assertEqual(args[-2], "/tmp/out.json")
+        self.assertEqual(args[-1], "7.5")
+
+    def test_default_protocol_config_lingers_mpv_by_default_too(self):
+        with mock.patch.object(orchestrate, "demote", return_value=["sudo", "-u", "someone"]), \
+             mock.patch("subprocess.Popen") as popen_mock, \
+             mock.patch("builtins.open", mock.mock_open()):
+            orchestrate.launch("mpv", "/fake/x.mp4", "/tmp/out.json",
+                                orchestrate.ProtocolConfig(), "/tmp/out.json.stderr.log")
+        args = popen_mock.call_args.args[0]
+        self.assertEqual(args[-1], str(orchestrate.DEFAULT_LINGER_SECONDS))
 
 
 class DemoteTests(unittest.TestCase):
