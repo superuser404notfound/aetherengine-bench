@@ -83,6 +83,7 @@ import Foundation
 @Test func reportRoundTripsThroughJSON() throws {
     let report = BenchReport(
         backend: "aether", engineVersion: "6.26.0", fixture: "av1-10bit.mkv",
+        renderPixels: "3840x2160",
         deliveredFrames: 2160, droppedFrames: 0, expectedFrames: 2160,
         output: OutputInfo(width: 1920, height: 804, bitDepth: 10, colorTransfer: "bt709", audioChannels: 2),
         startedAt: Date(timeIntervalSince1970: 0), endedAt: Date(timeIntervalSince1970: 75), servingPath: nil)
@@ -90,6 +91,9 @@ import Foundation
     let back = try JSONDecoder.bench.decode(BenchReport.self, from: data)
     #expect(back.deliveredFrames == 2160)
     #expect(back.output.bitDepth == 10)
+    // The surface an engine rendered into is what its GPU figure has to be read
+    // against, so it has to survive the round trip like any other measurement.
+    #expect(back.renderPixels == "3840x2160")
     // The shell runner and the Python renderer read this file too, so the dates
     // must be ISO 8601 text, not Foundation's default 2001-epoch double.
     let text = String(decoding: data, as: UTF8.self)

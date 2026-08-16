@@ -731,10 +731,15 @@ class LaunchTests(unittest.TestCase):
             orchestrate.launch("mpv", "/fake/x.mp4", "/tmp/out.json",
                                 orchestrate.ProtocolConfig(linger=7.5), "/tmp/out.json.stderr.log")
         args = popen_mock.call_args.args[0]
-        # run-mpv.sh <file> <settle> <measure> <report> <linger>: linger is
-        # the last argument, immediately after report_path.
-        self.assertEqual(args[-2], "/tmp/out.json")
-        self.assertEqual(args[-1], "7.5")
+        # run-mpv.sh <file> <settle> <measure> <report> <linger> <window_px>.
+        # Asserted by position from the script path forward rather than from
+        # the end, so appending a further argument cannot quietly move linger
+        # into another slot without this failing.
+        script_index = next(i for i, a in enumerate(args) if a.endswith("run-mpv.sh"))
+        positional = args[script_index + 1:]
+        self.assertEqual(positional[3], "/tmp/out.json")
+        self.assertEqual(positional[4], "7.5")
+        self.assertEqual(positional[5], orchestrate.WINDOW_PIXELS)
 
     def test_default_protocol_config_lingers_mpv_by_default_too(self):
         with mock.patch.object(orchestrate, "demote", return_value=["sudo", "-u", "someone"]), \
@@ -743,7 +748,8 @@ class LaunchTests(unittest.TestCase):
             orchestrate.launch("mpv", "/fake/x.mp4", "/tmp/out.json",
                                 orchestrate.ProtocolConfig(), "/tmp/out.json.stderr.log")
         args = popen_mock.call_args.args[0]
-        self.assertEqual(args[-1], str(orchestrate.DEFAULT_LINGER_SECONDS))
+        script_index = next(i for i, a in enumerate(args) if a.endswith("run-mpv.sh"))
+        self.assertEqual(args[script_index + 5], str(orchestrate.DEFAULT_LINGER_SECONDS))
 
 
 class DemoteTests(unittest.TestCase):

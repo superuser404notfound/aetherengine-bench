@@ -272,6 +272,13 @@ def _finalize_cell(cell):
     # misconfigured repeat), the same treatment servingPath already gets
     # above, not something to silently take one sample of.
     outputs = [(r.get("report") or {}).get("output") or {} for r in valid]
+    # The surface the engine rendered into, read back from the player itself.
+    # A GPU figure only means something against the pixel count that produced
+    # it, and these are not equal by construction: AppKit sizes windows in
+    # points and renders at the backing scale, mpv's geometry is in pixels.
+    cell["renderPixels"] = _unique(
+        r.get("report", {}).get("renderPixels") for r in valid
+        if r.get("report", {}).get("renderPixels"))
     cell["resolutions"] = _unique(
         f"{o['width']}x{o['height']}" for o in outputs if o.get("width") and o.get("height"))
     cell["bitDepths"] = _unique(o.get("bitDepth") for o in outputs if o.get("bitDepth"))
@@ -369,7 +376,10 @@ def _format_detail(name, cell):
                                        "color transfer varies")
         output_desc = f"{bit_text}, {transfer_text}"
 
-    line = f"- **{name}**: {frames}, {dropped}, {res}, {output_desc}."
+    surface = _one_or_varies(cell.get("renderPixels") or [],
+                             "render surface not reported",
+                             "render surface varies across repeats")
+    line = f"- **{name}**: {frames}, {dropped}, {res}, {output_desc}, rendered into {surface}."
     paths = cell.get("servingPaths") or []
     if len(paths) == 1:
         line += f" Served via **{paths[0]}**."
@@ -461,9 +471,25 @@ def render(results, fixture="hevc-4k-hdr10.mkv"):
         note = results.get("note") or "shortened validation timings, not published data"
         lines += [f"**DRY RUN: {note}.**", ""]
 
+    # The window is described by what the players reported rendering into, not
+    # by the size that was requested. Those differ: AppKit takes points and
+    # renders at the backing scale. A hardcoded "1920x1080" here once described
+    # a 3840x2160 surface for four engines and a 1920x1080 one for the fifth.
+    surfaces = _unique(
+        r.get("report", {}).get("renderPixels")
+        for r in results.get("runs", [])
+        if r.get("fixture") == fixture and not r.get("discarded")
+        and r.get("report", {}).get("renderPixels"))
+    if len(surfaces) == 1:
+        window_desc = f"windowed, {surfaces[0]} px rendered"
+    elif surfaces:
+        window_desc = ("windowed, render surface NOT equal across engines ("
+                       + ", ".join(sorted(surfaces)) + "), so the GPU column is not comparable")
+    else:
+        window_desc = "windowed, render surface not recorded by this session"
     lines.append(
         f"Measured on {machine_desc}, macOS {os_version}, "
-        f"{fixture}, windowed 1920x1080, {measure_s:.0f} s, median of {repeats}.")
+        f"{fixture}, {window_desc}, {measure_s:.0f} s, median of {repeats}.")
     if machine_model:
         # "Fanless" only prints when there is a model identifier a reader
         # can check it against: an unbacked chassis/thermal-design claim

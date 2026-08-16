@@ -1,7 +1,9 @@
 .DS_Store
 *.xcodeproj/xcuserdata/
-.build/
-.build-ks/
+# Any derived-data directory, not just the two the scripts use by default.
+# A one-off build directory once got staged with five full SwiftPM checkouts
+# inside it, which filled the disk mid-commit.
+.build*/
 DerivedData/
 Fixtures/*.mov
 Fixtures/*.zip

@@ -24,18 +24,23 @@ set -euo pipefail
 # not a config the code will discover for you.
 DEFAULT_LINGER_SECONDS=5
 
-URL="${1:?usage: run-mpv.sh <file> [settle=15] [measure=60] [report=/tmp/mpv.json] [linger=$DEFAULT_LINGER_SECONDS]}"
+URL="${1:?usage: run-mpv.sh <file> [settle=15] [measure=60] [report=/tmp/mpv.json] [linger=$DEFAULT_LINGER_SECONDS] [window_px=3840x2160]}"
 SETTLE="${2:-15}"
 MEASURE="${3:-60}"
 REPORT="${4:-/tmp/mpv.json}"
 LINGER="${5:-$DEFAULT_LINGER_SECONDS}"
 [ -f "$URL" ] || { echo "run-mpv.sh: no such file: $URL" >&2; exit 1; }
 
-# Fixed window on a fixed display, matching BenchWindow.swift's default
-# 1920x1080 on display index 0. Window size and display move GPU load more
-# than any codec difference, so both are pinned the same way for mpv.
-WINDOW_W=1920
-WINDOW_H=1080
+# Fixed window on a fixed display, matching what BenchWindow.swift actually
+# renders into. That distinction is the whole point: AppKit takes its size in
+# POINTS and renders at the display's backing scale, so 1920x1080 points is
+# 3840x2160 pixels on a 2x display, while mpv's --geometry is in PIXELS. Passing
+# the same numbers to both would have given mpv a quarter of the pixels and
+# therefore a quarter of the GPU work. The caller passes the pixel geometry, and
+# what mpv really got is measured below and reported, never assumed.
+WINDOW_PX="${6:-3840x2160}"
+WINDOW_W="${WINDOW_PX%x*}"
+WINDOW_H="${WINDOW_PX#*x}"
 
 SOCK="$(mktemp -u "${TMPDIR:-/tmp}/mpv-bench-XXXXXX").sock"
 LOG="$(mktemp -u "${TMPDIR:-/tmp}/mpv-bench-XXXXXX").log"
@@ -189,7 +194,7 @@ ENDED=$(date -u +%s)
 PT_END=$(ask playback-time); require "$PT_END" playback-time
 DROPS_END=$(ask frame-drop-count); require "$DROPS_END" frame-drop-count
 
-python3 - "$REPORT" "$WIDTH" "$HEIGHT" "$FPS" "$HWDEC_CURRENT" "$PIXFMT" "$HW_PIXFMT" \
+RENDER_PX="${OSD_W}x${OSD_H}" python3 - "$REPORT" "$WIDTH" "$HEIGHT" "$FPS" "$HWDEC_CURRENT" "$PIXFMT" "$HW_PIXFMT" \
          "$GAMMA" "$CHANNELS" "$PT_START" "$DROPS_START" "$PT_END" "$DROPS_END" "$MEASURE" \
          "$STARTED" "$ENDED" "$(basename "$URL")" "$VERSION" <<'PY'
 import json, re, sys, time
@@ -252,6 +257,9 @@ report_obj = {
     "backend": "mpv",
     "engineVersion": version,
     "fixture": fixture,
+    # What mpv actually rendered into, read back from osd-width/osd-height and
+    # already asserted against the requested geometry above.
+    "renderPixels": os.environ["RENDER_PX"],
     "deliveredFrames": delivered,
     "droppedFrames": dropped,
     "expectedFrames": expected,

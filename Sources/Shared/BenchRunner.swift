@@ -51,6 +51,7 @@ final class BenchRunner {
                 backend: arguments.backend.rawValue,
                 engineVersion: type(of: backend).engineVersion,
                 fixture: arguments.url.lastPathComponent,
+                renderPixels: BenchWindow.actualGeometry.map { "\($0.pixelWidth)x\($0.pixelHeight)" },
                 deliveredFrames: max(0, backend.deliveredFrames - framesAtStart),
                 droppedFrames: droppedFrames,
                 expectedFrames: Int(arguments.measure * backend.nominalFrameRate),

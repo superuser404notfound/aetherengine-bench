@@ -12,6 +12,12 @@ struct BenchReport: Codable {
     let backend: String
     let engineVersion: String
     let fixture: String
+    /// The surface the engine actually rendered into, in pixels. GPU cost scales
+    /// with pixels, and a size requested in points is not the pixel count on a
+    /// Retina display, so this is measured rather than assumed and published
+    /// alongside the numbers it explains. nil only for a writer that cannot
+    /// determine it.
+    let renderPixels: String?
     let deliveredFrames: Int
     let droppedFrames: Int
     let expectedFrames: Int

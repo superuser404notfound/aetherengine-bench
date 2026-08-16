@@ -751,5 +751,43 @@ class RefusalCellTests(unittest.TestCase):
         self.assertEqual(render_table._humanize_refusal_reason("hevc-4k-hdr10.mkv", other), other)
 
 
+class RenderSurfaceTests(unittest.TestCase):
+    """A GPU figure means nothing without the pixel count that produced it, and
+    the two are not equal by construction (AppKit sizes in points and renders at
+    the backing scale, mpv's geometry is in pixels). The header must state what
+    was measured, and must say so plainly when the engines did not match."""
+
+    def _sample(self, surfaces):
+        runs = []
+        for backend, px in surfaces.items():
+            run = json.loads(json.dumps(SAMPLE["runs"][0]))
+            run["backend"] = backend
+            run["fixture"] = "hevc-4k-hdr10.mp4"
+            run["discarded"] = False
+            if px is not None:
+                run["report"]["renderPixels"] = px
+            else:
+                run["report"].pop("renderPixels", None)
+            runs.append(run)
+        return {**SAMPLE, "runs": runs}
+
+    def test_equal_surfaces_are_stated(self):
+        out = render_table.render(self._sample({"aether": "3840x2160", "mpv": "3840x2160"}),
+                                  fixture="hevc-4k-hdr10.mp4")
+        self.assertIn("3840x2160 px rendered", out)
+
+    def test_unequal_surfaces_disqualify_the_gpu_column_out_loud(self):
+        out = render_table.render(self._sample({"aether": "3840x2160", "mpv": "1920x1080"}),
+                                  fixture="hevc-4k-hdr10.mp4")
+        self.assertIn("NOT equal across engines", out)
+        self.assertIn("not comparable", out)
+
+    def test_a_session_without_the_field_says_so_rather_than_claiming_a_size(self):
+        out = render_table.render(self._sample({"aether": None, "mpv": None}),
+                                  fixture="hevc-4k-hdr10.mp4")
+        self.assertIn("not recorded by this session", out)
+        self.assertNotIn("windowed 1920x1080", out)
+
+
 if __name__ == "__main__":
     unittest.main()

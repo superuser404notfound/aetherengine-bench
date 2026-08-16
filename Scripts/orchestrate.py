@@ -158,6 +158,19 @@ TERMINATE_GRACE_SECONDS = 3.0
 # it as a crash would be a false statement about the engine.
 REFUSAL_EXIT_CODE = 3
 
+# The window, in the two units that matter. AppKit takes POINTS and renders at
+# the display's backing scale; mpv's --geometry takes PIXELS. Passing 1920x1080
+# to both, which this script did until it was measured, gave the four AppKit
+# hosts 3840x2160 pixels and mpv 1920x1080, so mpv did a quarter of the GPU
+# work of the engines it was being compared against. Both numbers are now
+# explicit, both are read back from the players themselves (BenchWindow's
+# measured backing size, mpv's osd-width/osd-height) into every report's
+# renderPixels field, and a run whose surface does not match the rest is
+# visible in the published table rather than silently cheaper.
+WINDOW_POINTS = "1920x1080"
+WINDOW_BACKING_SCALE = 2
+WINDOW_PIXELS = "x".join(str(int(v) * WINDOW_BACKING_SCALE) for v in WINDOW_POINTS.split("x"))
+
 
 @dataclasses.dataclass(frozen=True)
 class ProtocolConfig:
@@ -573,11 +586,11 @@ def launch(backend, fixture_path, report_path, cfg, stderr_path):
         if backend == "mpv":
             return subprocess.Popen(demote() + [str(ROOT / "Scripts/run-mpv.sh"), fixture_path,
                                                  str(cfg.settle), str(cfg.measure), report_path,
-                                                 str(cfg.linger)],
+                                                 str(cfg.linger), WINDOW_PIXELS],
                                      stderr=stderr_file)
         return subprocess.Popen(demote() + [str(BINARIES[backend]), "--backend", backend, "--url", fixture_path,
                                              "--settle", str(cfg.settle), "--measure", str(cfg.measure),
-                                             "--window", "1920x1080", "--display", "0",
+                                             "--window", WINDOW_POINTS, "--display", "0",
                                              "--report", report_path, "--linger", str(cfg.linger)],
                                  stderr=stderr_file)
 
