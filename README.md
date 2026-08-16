@@ -31,7 +31,7 @@ Tools, all available via Homebrew:
 brew install xcodegen ffmpeg gpac mpv dovi_tool
 ```
 
-You also need Xcode 26+ (for `xcodebuild`) and `curl`/`unzip`/`python3` (stdlib only, no pip installs) from the base system.
+You also need `curl`/`unzip`/`python3` (stdlib only, no pip installs) from the base system, and Xcode for `xcodebuild`. This repository was built with Xcode 26.6 (build 17F113); earlier versions are untested.
 
 **1. Build the fixtures.** One CC-BY master (Blender Foundation's *Tears of Steel*, downloaded once, 6.4 GB) is cut into the eight benchmark files:
 
@@ -120,4 +120,11 @@ Stated without hedging, because a benchmark that only lists its own strengths is
 
 ## License
 
-GPLv2, see `LICENSE`.
+**GPL-3.0** (see `LICENSE`). This repository builds `KSBench`, which links KSPlayer's free build, and KSPlayer's own `LICENSE` file (checked out at `2.3.4` via SwiftPM from [kingslay/KSPlayer](https://github.com/kingslay/KSPlayer)) is GNU GPL version 3, not version 2. KSPlayer's own FFmpegKit dependency ([kingslay/FFmpegKit](https://github.com/kingslay/FFmpegKit), pinned `6.1.4`) carries the identical GPLv3 text, so nothing about that pin narrows the requirement. GPLv3 and GPLv2 are mutually incompatible, so a work linking GPLv3 code cannot be distributed under GPLv2, and GPL-3.0 is therefore the license for this whole repository, not just for `KSBench`.
+
+The other four engines, checked the same way, do not carry this obligation themselves, they just do not relax it either:
+
+- **AetherEngine** ([superuser404notfound/AetherEngine](https://github.com/superuser404notfound/AetherEngine)) is LGPLv3 with an app-store distribution exception, per its own `LICENSE` file.
+- **VLCKit** (via [virtualox/vlckit-spm](https://github.com/virtualox/vlckit-spm)) is LGPLv2.1, per that package's own README, which points to VLC's upstream `COPYING`.
+- **libmpv** is invoked as an external process (`Scripts/run-mpv.sh` launches the standalone `mpv` binary over its own IPC socket), never linked into a binary this repository builds, so its own license terms have no bearing on this repository's.
+- **AVPlayer** is an Apple system framework, not a dependency this repository vendors, checks out, or links, so it carries no license implication here either.
