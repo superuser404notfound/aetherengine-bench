@@ -26,6 +26,24 @@ pretty:
   the fixture being rendered (orchestrate.py counts them per (backend,
   fixture)), never as one session-wide total sitting under every fixture's
   table, which would re-bill every fixture an engine did not fail on.
+- A refusal (an engine deterministically declining a source it was never
+  going to play, orchestrate.py's REFUSAL_EXIT_CODE, never retried) is not
+  a launch failure and renders in the reader's own terms: which fixture
+  was declined and the engine's own reported reason, never the exit code
+  or the "bench refused:" wrapper the harness writes to stderr, and never
+  the backend name a second time (the row already carries it). See
+  _humanize_refusal_reason. Every other discard reason, a crash, a frame
+  gate miss, a thermal discard, is untouched, it already reads in plain
+  terms.
+- This block is deliberately short: the prose behind every rule it only
+  gestures at (launch failure vs refusal, why CPU power is dropped, the
+  mpv hwdec fairness call, what "varies across repeats" or "not reported"
+  means) lives in this repository's own README instead of being repeated
+  here, and the block links to it once at the bottom rather than
+  scattering a pointer after each shortened line. Whichever wording a
+  reader actually needs a moment's proof for, the README and the raw
+  Results/*.json underneath it are one click away, never the excuse for
+  padding what gets pasted into another project's README.
 - The machine is named from results["machine"]/["machineModel"], not a
   hardcoded literal. The "fanless" claim (why the protocol has cooldowns
   and a throttling discard rule) only prints alongside a model identifier
@@ -125,6 +143,31 @@ def _humanize_discard_reason(reason):
     return _NEGATIVE_POWER_ARITHMETIC_RE.sub(lambda m: m.group(0).split(" = raw ")[0], reason)
 
 
+# launch_with_retry() (Scripts/orchestrate.py) does not retry a run whose
+# exit code is REFUSAL_EXIT_CODE: a deterministic "this engine will never
+# play this source", not a fault (see "What is measured, and why" in the
+# README for the retried-crash counterpart it is distinct from).
+# measure_once() then writes that run's discardReason as "<backend>:
+# refused this source (exit N)[: bench refused: <engine's own message>]"
+# (see launch_reason's own comment; the "bench refused: <message>" tail is
+# only present when stderr capture actually got a line, so it is
+# optional). The backend name (the row's own label), the exit code, and
+# the harness's "bench refused:" wrapper are this benchmark's own
+# plumbing, a reader gets no use out of them. Anything not shaped like a
+# refusal (a crash, a frame gate miss, a thermal discard) is returned
+# unchanged, this only ever rewrites the one shape it recognizes.
+_REFUSAL_RE = re.compile(
+    r"^\w+: refused this source \(exit \d+\)(?::\s*bench refused:\s*(?P<message>.+))?$")
+
+
+def _humanize_refusal_reason(fixture, reason):
+    m = _REFUSAL_RE.match(reason or "")
+    if not m:
+        return reason
+    message = m.group("message")
+    return f"refuses {fixture}: {message}" if message else f"refuses {fixture}"
+
+
 def _rehabilitate_cpu_power_only_discard(run):
     """A run discarded only because its CPU package power went negative
     after baseline subtraction is not a bad measurement for anything this
@@ -170,10 +213,16 @@ def _finalize_cell(cell):
     all_runs = [_rehabilitate_cpu_power_only_discard(r) for r in cell.pop("_runs")]
     valid = [r for r in all_runs if not r.get("discarded")]
     discarded = [r for r in all_runs if r.get("discarded")]
+    # Every run in a cell shares the same fixture, cells are grouped by
+    # (backend, fixture) in summarize(); read off any run rather than
+    # threading fixture through as a second argument.
+    fixture = all_runs[0]["fixture"] if all_runs else None
 
     cell["totalRuns"] = len(all_runs)
     cell["discardedCount"] = len(discarded)
-    cell["discardedReasons"] = _unique(_humanize_discard_reason(r.get("discardReason")) for r in discarded)
+    cell["discardedReasons"] = _unique(
+        _humanize_refusal_reason(fixture, _humanize_discard_reason(r.get("discardReason")))
+        for r in discarded)
 
     if not valid:
         cell["valid"] = False
@@ -360,18 +409,15 @@ def _cpu_power_limitation_note(table, fixture):
     """The stated limitation for the column this renderer deliberately does
     not draw. Backed by the actual observed spread for the fixture being
     rendered when there is one (see _cpu_power_spread_evidence), rather
-    than only asserting the noise exists.
-
-    Deliberately does not claim a fixed magnitude ("hundreds of
-    milliwatts") or a fixed load level ("at 4K") in the general sentence:
-    the underlying cause (idle baseline sampled once per fixture block,
-    while the SoC's temperature drifts with load over the course of that
-    block) scales with how demanding the fixture is, so a heavy 4K fixture
-    and a light 1080p one do not show the same spread (44 to 47 mW for
-    AetherEngine on h264-1080p.mp4 in the session this was written
-    against, versus the hundreds-of-mW swings on the 4K fixtures). Only
-    the per-fixture example carries a number, so the note never asserts a
-    magnitude the fixture actually being rendered might not back up.
+    than only asserting the noise exists; the per-fixture example is the
+    only number in this note, so it never asserts a magnitude the fixture
+    actually being rendered might not back up (44 to 47 mW for AetherEngine
+    on a 1080p fixture, versus hundreds of mW on the 4K ones, in the
+    session this was written against, see the README's "Known gaps" for
+    both figures side by side). The full reasoning (why the idle baseline
+    drifts, why the column is dropped uniformly rather than kept where it
+    happens to look stable) lives there too; this stays to one sentence of
+    why plus the one number that backs it for this fixture.
     """
     evidence = _cpu_power_spread_evidence(table, fixture)
     example = ""
@@ -383,15 +429,10 @@ def _cpu_power_limitation_note(table, fixture):
             example += f", a {hi / lo:.1f}x range"
         example += "."
     return (
-        "CPU package power was measured for every run but is not published above: it is a "
-        "baseline-subtracted figure, and the idle baseline is sampled once per fixture "
-        "block while the SoC's temperature drifts with load over that block, so on the "
-        "more demanding fixtures the same engine's own repeats can disagree more than the "
-        f"column would be used to show between engines.{example} The column is dropped for "
-        "every fixture uniformly rather than kept where it happens to look stable. GPU "
-        "power, CPU load and RSS did not show this problem on any of the session's eight "
-        "fixtures and are published above instead. CPU power is still recorded for every "
-        "run in the committed session file under Results/ in this repository."
+        "CPU package power was measured for every run but is not published above: the idle "
+        "baseline drifts with load enough that one engine's own repeats can disagree more "
+        f"than the column would be used to show between engines.{example} Recorded for every "
+        "run in Results/; see \"Known gaps\" in the README for the full reasoning."
     )
 
 
@@ -431,9 +472,8 @@ def render(results, fixture="hevc-4k-hdr10.mkv"):
         # discard rule, so it belongs next to the numbers, not buried in
         # the generic caveat list at the bottom.
         lines.append(
-            f"{machine_model} is fanless: sustained decode can reach thermal pressure on this "
-            "rig, which is why the protocol includes cooldowns between runs and discards any "
-            "window recorded while the SoC reported throttling.")
+            f"{machine_model} is fanless: sustained decode can reach thermal pressure, which is "
+            "why the protocol has cooldowns between runs and discards throttled windows.")
 
     lines += [
         "",
@@ -473,25 +513,24 @@ def render(results, fixture="hevc-4k-hdr10.mkv"):
     # Placed directly under the table it concerns, not down by the
     # versions/method notes, and scoped to this fixture only (see
     # _fixture_launch_failures's own docstring for why a session-wide sum
-    # would misattribute failures to fixtures that never had any).
+    # would misattribute failures to fixtures that never had any). What
+    # counts as a launch failure versus a refusal, and why the two are
+    # counted so differently, is spelled out in the README rather than
+    # here, see the module docstring.
     launch_failures = _fixture_launch_failures(results.get("launchFailures") or {}, fixture)
     if launch_failures:
         fails = ", ".join(f"{name} {n}" for name, n in launch_failures)
         lines += [
-            f"Launch failures on {fixture} (the process crashed or never became ready on a "
-            "launch attempt; every failed attempt is counted, whether or not a later attempt "
-            "in the same cell went on to succeed. A deterministic refusal, an engine correctly "
-            "declining a source it was never going to support, is not counted here: it shows "
-            f"once, in the cell's own n/a reason, on the first attempt): {fails}.",
+            f"Launch failures on {fixture} (crashes that were retried, not refusals, see the "
+            f"README): {fails}.",
             "",
         ]
 
     if detail_lines:
         lines.append(
-            "Frame delivery and output (median delivered/expected frames, dropped frames; "
-            "resolution, bit depth and HDR transfer are informational per engine and are never "
-            "comparable across engines; a value that disagreed across repeats is shown as "
-            "'varies across repeats' rather than one repeat picked silently):")
+            "Frame delivery and output (median; resolution, bit depth and HDR transfer are "
+            "informational per engine only, shown as 'varies across repeats' when they "
+            "disagree, see the README):")
         lines.extend(detail_lines)
         lines.append("")
 
@@ -507,9 +546,8 @@ def render(results, fixture="hevc-4k-hdr10.mkv"):
         "Power figures are package power with an idle baseline subtracted, so they are "
         "attributable to the run and not to the machine.",
         _cpu_power_limitation_note(table, fixture),
-        "libmpv is measured with --hwdec=auto-safe (hardware decode). mpv's own shipped "
-        "default is software decode (--hwdec=no); measuring that default would score a flag "
-        "omission as engine inefficiency rather than a real difference between engines.",
+        "libmpv is measured with --hwdec=auto-safe (hardware decode), not mpv's own "
+        "software-decode default, see \"Fairness decisions\" in the README.",
         "Method and raw results: https://github.com/superuser404notfound/aetherengine-bench",
     ]
     return "\n".join(lines)

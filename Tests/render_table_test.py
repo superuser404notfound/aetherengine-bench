@@ -682,5 +682,74 @@ class NegativePowerRehabilitationTests(unittest.TestCase):
         self.assertNotIn("-0.6 mW", out)
 
 
+class RefusalCellTests(unittest.TestCase):
+    """A refusal is deterministic (orchestrate.py's REFUSAL_EXIT_CODE, "this
+    engine will never play this source", never retried): every repeat gets
+    the identical discardReason and the cell ends up with no valid runs at
+    all. The raw string measure_once() writes is "<backend>: refused this
+    source (exit N)[: bench refused: <engine's own message>]" (see
+    launch_reason's own comment in orchestrate.py); a reader of the
+    published table has no use for the backend name (already the row's own
+    label), the exit code, or the harness's own "bench refused:" wrapper.
+    What they need is which fixture was declined and, if the harness
+    captured one, the engine's own reported reason for declining it.
+    """
+
+    @staticmethod
+    def _refused_run(backend, fixture, message="This media format is not supported."):
+        reason = f"{backend}: refused this source (exit 3): bench refused: {message}"
+        return {"backend": backend, "fixture": fixture, "repeat": 0,
+                "discarded": True, "discardReason": reason, "refused": True,
+                "power": None, "process": None, "report": None,
+                "droppedFramesReported": None}
+
+    def test_refusal_cell_states_the_fixture_and_the_engines_own_reason(self):
+        runs = [self._refused_run("avplayer", "hevc-4k-hdr10.mkv")]
+        out = render_table.render({**SAMPLE, "runs": SAMPLE["runs"] + runs})
+        line = next(l for l in out.splitlines() if l.startswith("| **AVPlayer**"))
+        self.assertIn("n/a (refuses hevc-4k-hdr10.mkv: This media format is not supported.)", line)
+
+    def test_refusal_cell_drops_the_exit_code_and_harness_plumbing(self):
+        runs = [self._refused_run("avplayer", "hevc-4k-hdr10.mkv")]
+        out = render_table.render({**SAMPLE, "runs": SAMPLE["runs"] + runs})
+        line = next(l for l in out.splitlines() if l.startswith("| **AVPlayer**"))
+        self.assertNotIn("exit 3", line)
+        self.assertNotIn("bench refused", line)
+        self.assertNotIn("avplayer:", line)
+
+    def test_refusal_with_no_captured_message_still_names_the_fixture(self):
+        # _read_stderr_tail (orchestrate.py) can come back empty (nothing
+        # captured); launch_reason then has no ": bench refused: ..." tail
+        # at all, see _exit_failure_reason. The cell reason must still be
+        # readable, just without a message it was never given.
+        reason = "ksplayer: refused this source (exit 3)"
+        runs = [{"backend": "ksplayer", "fixture": "vp9.webm", "repeat": 0,
+                 "discarded": True, "discardReason": reason, "refused": True,
+                 "power": None, "process": None, "report": None,
+                 "droppedFramesReported": None}]
+        cell = render_table.summarize(runs)["ksplayer"]["vp9.webm"]
+        self.assertEqual(cell["reason"], "refuses vp9.webm")
+
+    def test_a_non_refusal_discard_reason_is_untouched(self):
+        # Crashes, thermal discards and frame-gate misses keep their own
+        # existing phrasing; only the refusal shape is rewritten.
+        reason = "launch failed after 5 attempt(s): crashed during settle (exit 1)"
+        runs = [{"backend": "ksplayer", "fixture": "av1-10bit.mkv", "repeat": 0,
+                 "discarded": True, "discardReason": reason, "refused": False,
+                 "power": None, "process": None, "report": None,
+                 "droppedFramesReported": None}]
+        cell = render_table.summarize(runs)["ksplayer"]["av1-10bit.mkv"]
+        self.assertEqual(cell["reason"], reason)
+
+    def test_humanize_refusal_reason_is_a_noop_on_non_refusal_text(self):
+        # Whitebox check on the helper directly: anything that does not
+        # match the refusal shape (including None, and reasons that merely
+        # contain the word "refused" without the exact launch-retry
+        # phrasing) passes through unchanged.
+        self.assertIsNone(render_table._humanize_refusal_reason("hevc-4k-hdr10.mkv", None))
+        other = "SoC reported throttling during the window (level=Moderate)"
+        self.assertEqual(render_table._humanize_refusal_reason("hevc-4k-hdr10.mkv", other), other)
+
+
 if __name__ == "__main__":
     unittest.main()
