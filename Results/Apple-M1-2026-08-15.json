@@ -1,0 +1,688 @@
+{
+  "date": "2026-08-15",
+  "launchFailures": {
+    "aether": {
+      "av1-10bit.mkv": 0,
+      "hevc-4k-hdr10.mp4": 0
+    },
+    "avplayer": {
+      "av1-10bit.mkv": 0,
+      "hevc-4k-hdr10.mp4": 0
+    },
+    "ksplayer": {
+      "av1-10bit.mkv": 1,
+      "hevc-4k-hdr10.mp4": 2
+    },
+    "mpv": {
+      "av1-10bit.mkv": 0,
+      "hevc-4k-hdr10.mp4": 0
+    },
+    "vlckit": {
+      "av1-10bit.mkv": 0,
+      "hevc-4k-hdr10.mp4": 0
+    }
+  },
+  "machine": "Apple-M1",
+  "machineModel": "MacBookAir10,1",
+  "os": "26.5.2",
+  "protocol": {
+    "cooldown": 15.0,
+    "gate_threshold": 0.95,
+    "max_launch_attempts": 5,
+    "measure": 20.0,
+    "repeats": 1,
+    "settle": 5.0
+  },
+  "runs": [
+    {
+      "backend": "aether",
+      "baseline": {
+        "anePowerMw": 0.0,
+        "cpuPowerMw": 32.15,
+        "eClusterResidency": 9.857833333333334,
+        "gpuPowerMw": 0.03333333333333333,
+        "pClusterResidency": 2.488166666666666,
+        "samples": 60,
+        "thermalPressure": "Nominal",
+        "throttled": false
+      },
+      "discardReason": "",
+      "discarded": false,
+      "droppedFramesReported": true,
+      "fixture": "hevc-4k-hdr10.mp4",
+      "frameGate": {
+        "deliveredFrames": 477,
+        "elapsedSeconds": 20.0,
+        "expectedFramesReal": 479.0,
+        "expectedFramesReported": 479,
+        "expectedFramesUsed": "real elapsed window (endedAt - startedAt) * nominalFrameRate",
+        "nominalMeasureSeconds": 20.0,
+        "passed": true,
+        "ratio": 0.9958246346555324,
+        "threshold": 0.95
+      },
+      "launchAttempts": 1,
+      "power": {
+        "anePowerMw": 0.0,
+        "cpuPowerMw": 311.05,
+        "eClusterResidency": 57.712,
+        "gpuPowerMw": 61.71666666666667,
+        "pClusterResidency": 8.844000000000001,
+        "samples": 20,
+        "thermalPressure": "Nominal",
+        "throttled": false
+      },
+      "powerRaw": {
+        "anePowerMw": 0.0,
+        "cpuPowerMw": 343.2,
+        "eClusterResidency": 57.712,
+        "gpuPowerMw": 61.75,
+        "pClusterResidency": 8.844000000000001,
+        "samples": 20,
+        "thermalPressure": "Nominal",
+        "throttled": false
+      },
+      "process": {
+        "cpuPercentMax": 13.3,
+        "cpuPercentMean": 3.810000000000001,
+        "rssMbMean": 212.05078125,
+        "rssMbPeak": 242.015625
+      },
+      "refused": false,
+      "repeat": 0,
+      "report": {
+        "backend": "aether",
+        "deliveredFrames": 477,
+        "droppedFrames": 0,
+        "endedAt": "2026-08-15T21:10:05Z",
+        "engineVersion": "6.26.0",
+        "expectedFrames": 479,
+        "fixture": "hevc-4k-hdr10.mp4",
+        "output": {
+          "audioChannels": 2,
+          "bitDepth": 10,
+          "colorTransfer": "hdr10",
+          "height": 1714,
+          "width": 3840
+        },
+        "startedAt": "2026-08-15T21:09:45Z"
+      }
+    },
+    {
+      "backend": "avplayer",
+      "baseline": {
+        "anePowerMw": 0.0,
+        "cpuPowerMw": 32.15,
+        "eClusterResidency": 9.857833333333334,
+        "gpuPowerMw": 0.03333333333333333,
+        "pClusterResidency": 2.488166666666666,
+        "samples": 60,
+        "thermalPressure": "Nominal",
+        "throttled": false
+      },
+      "discardReason": "",
+      "discarded": false,
+      "droppedFramesReported": true,
+      "fixture": "hevc-4k-hdr10.mp4",
+      "frameGate": {
+        "deliveredFrames": 480,
+        "elapsedSeconds": 20.0,
+        "expectedFramesReal": 480.0,
+        "expectedFramesReported": 480,
+        "expectedFramesUsed": "real elapsed window (endedAt - startedAt) * nominalFrameRate",
+        "nominalMeasureSeconds": 20.0,
+        "passed": true,
+        "ratio": 1.0,
+        "threshold": 0.95
+      },
+      "launchAttempts": 1,
+      "power": {
+        "anePowerMw": 0.0,
+        "cpuPowerMw": 57.25000000000001,
+        "eClusterResidency": 24.895,
+        "gpuPowerMw": 5.616666666666667,
+        "pClusterResidency": 4.824499999999999,
+        "samples": 20,
+        "thermalPressure": "Nominal",
+        "throttled": false
+      },
+      "powerRaw": {
+        "anePowerMw": 0.0,
+        "cpuPowerMw": 89.4,
+        "eClusterResidency": 24.895,
+        "gpuPowerMw": 5.65,
+        "pClusterResidency": 4.824499999999999,
+        "samples": 20,
+        "thermalPressure": "Nominal",
+        "throttled": false
+      },
+      "process": {
+        "cpuPercentMax": 2.7,
+        "cpuPercentMean": 1.5099999999999996,
+        "rssMbMean": 81.303125,
+        "rssMbPeak": 81.703125
+      },
+      "refused": false,
+      "repeat": 0,
+      "report": {
+        "backend": "avplayer",
+        "deliveredFrames": 480,
+        "droppedFrames": 0,
+        "endedAt": "2026-08-15T21:11:27Z",
+        "engineVersion": "Version 26.5.2 (Build 25F84)",
+        "expectedFrames": 480,
+        "fixture": "hevc-4k-hdr10.mp4",
+        "output": {
+          "audioChannels": 2,
+          "bitDepth": 10,
+          "colorTransfer": "SMPTE_ST_2084_PQ",
+          "height": 1714,
+          "width": 3840
+        },
+        "startedAt": "2026-08-15T21:11:07Z"
+      }
+    },
+    {
+      "backend": "vlckit",
+      "baseline": {
+        "anePowerMw": 0.0,
+        "cpuPowerMw": 32.15,
+        "eClusterResidency": 9.857833333333334,
+        "gpuPowerMw": 0.03333333333333333,
+        "pClusterResidency": 2.488166666666666,
+        "samples": 60,
+        "thermalPressure": "Nominal",
+        "throttled": false
+      },
+      "discardReason": "",
+      "discarded": false,
+      "droppedFramesReported": true,
+      "fixture": "hevc-4k-hdr10.mp4",
+      "frameGate": {
+        "deliveredFrames": 474,
+        "elapsedSeconds": 20.0,
+        "expectedFramesReal": 480.0,
+        "expectedFramesReported": 480,
+        "expectedFramesUsed": "real elapsed window (endedAt - startedAt) * nominalFrameRate",
+        "nominalMeasureSeconds": 20.0,
+        "passed": true,
+        "ratio": 0.9875,
+        "threshold": 0.95
+      },
+      "launchAttempts": 1,
+      "power": {
+        "anePowerMw": 0.0,
+        "cpuPowerMw": 78.65,
+        "eClusterResidency": 46.693,
+        "gpuPowerMw": 256.71666666666664,
+        "pClusterResidency": 4.111000000000001,
+        "samples": 20,
+        "thermalPressure": "Nominal",
+        "throttled": false
+      },
+      "powerRaw": {
+        "anePowerMw": 0.0,
+        "cpuPowerMw": 110.8,
+        "eClusterResidency": 46.693,
+        "gpuPowerMw": 256.75,
+        "pClusterResidency": 4.111000000000001,
+        "samples": 20,
+        "thermalPressure": "Nominal",
+        "throttled": false
+      },
+      "process": {
+        "cpuPercentMax": 15.9,
+        "cpuPercentMean": 14.280000000000001,
+        "rssMbMean": 118.51796875,
+        "rssMbPeak": 119.453125
+      },
+      "refused": false,
+      "repeat": 0,
+      "report": {
+        "backend": "vlckit",
+        "deliveredFrames": 474,
+        "droppedFrames": 0,
+        "endedAt": "2026-08-15T21:12:51Z",
+        "engineVersion": "4.0.0-dev Otto Chriek",
+        "expectedFrames": 480,
+        "fixture": "hevc-4k-hdr10.mp4",
+        "output": {
+          "audioChannels": 2,
+          "bitDepth": 0,
+          "colorTransfer": "unreported",
+          "height": 1714,
+          "width": 3840
+        },
+        "startedAt": "2026-08-15T21:12:31Z"
+      }
+    },
+    {
+      "backend": "ksplayer",
+      "baseline": {
+        "anePowerMw": 0.0,
+        "cpuPowerMw": 32.15,
+        "eClusterResidency": 9.857833333333334,
+        "gpuPowerMw": 0.03333333333333333,
+        "pClusterResidency": 2.488166666666666,
+        "samples": 60,
+        "thermalPressure": "Nominal",
+        "throttled": false
+      },
+      "discardReason": "",
+      "discarded": false,
+      "droppedFramesReported": true,
+      "fixture": "hevc-4k-hdr10.mp4",
+      "frameGate": {
+        "deliveredFrames": 480,
+        "elapsedSeconds": 20.0,
+        "expectedFramesReal": 480.0,
+        "expectedFramesReported": 480,
+        "expectedFramesUsed": "real elapsed window (endedAt - startedAt) * nominalFrameRate",
+        "nominalMeasureSeconds": 20.0,
+        "passed": true,
+        "ratio": 1.0,
+        "threshold": 0.95
+      },
+      "launchAttempts": 2,
+      "power": {
+        "anePowerMw": 0.0,
+        "cpuPowerMw": 330.95000000000005,
+        "eClusterResidency": 99.23,
+        "gpuPowerMw": 152.76666666666668,
+        "pClusterResidency": 4.659999999999999,
+        "samples": 20,
+        "thermalPressure": "Nominal",
+        "throttled": false
+      },
+      "powerRaw": {
+        "anePowerMw": 0.0,
+        "cpuPowerMw": 363.1,
+        "eClusterResidency": 99.23,
+        "gpuPowerMw": 152.8,
+        "pClusterResidency": 4.659999999999999,
+        "samples": 20,
+        "thermalPressure": "Nominal",
+        "throttled": false
+      },
+      "process": {
+        "cpuPercentMax": 8.3,
+        "cpuPercentMean": 6.545,
+        "rssMbMean": 218.98359375,
+        "rssMbPeak": 254.671875
+      },
+      "refused": false,
+      "repeat": 0,
+      "report": {
+        "backend": "ksplayer",
+        "deliveredFrames": 480,
+        "droppedFrames": 0,
+        "endedAt": "2026-08-15T21:14:17Z",
+        "engineVersion": "KSPlayer 2.3.4 (free GPL build)",
+        "expectedFrames": 480,
+        "fixture": "hevc-4k-hdr10.mp4",
+        "output": {
+          "audioChannels": 2,
+          "bitDepth": 10,
+          "colorTransfer": "SMPTE_ST_2084_PQ",
+          "height": 1714,
+          "width": 3840
+        },
+        "servingPath": "KSMEPlayer",
+        "startedAt": "2026-08-15T21:13:57Z"
+      }
+    },
+    {
+      "backend": "mpv",
+      "baseline": {
+        "anePowerMw": 0.0,
+        "cpuPowerMw": 32.15,
+        "eClusterResidency": 9.857833333333334,
+        "gpuPowerMw": 0.03333333333333333,
+        "pClusterResidency": 2.488166666666666,
+        "samples": 60,
+        "thermalPressure": "Nominal",
+        "throttled": false
+      },
+      "discardReason": "",
+      "discarded": false,
+      "droppedFramesReported": true,
+      "fixture": "hevc-4k-hdr10.mp4",
+      "frameGate": {
+        "deliveredFrames": 483,
+        "elapsedSeconds": 20.0,
+        "expectedFramesReal": 480.0,
+        "expectedFramesReported": 480,
+        "expectedFramesUsed": "real elapsed window (endedAt - startedAt) * nominalFrameRate",
+        "nominalMeasureSeconds": 20.0,
+        "passed": true,
+        "ratio": 1.00625,
+        "threshold": 0.95
+      },
+      "launchAttempts": 1,
+      "power": {
+        "anePowerMw": 0.0,
+        "cpuPowerMw": 98.69999999999999,
+        "eClusterResidency": 44.5325,
+        "gpuPowerMw": 470.3666666666666,
+        "pClusterResidency": 6.291499999999999,
+        "samples": 20,
+        "thermalPressure": "Nominal",
+        "throttled": false
+      },
+      "powerRaw": {
+        "anePowerMw": 0.0,
+        "cpuPowerMw": 130.85,
+        "eClusterResidency": 44.5325,
+        "gpuPowerMw": 470.4,
+        "pClusterResidency": 6.291499999999999,
+        "samples": 20,
+        "thermalPressure": "Nominal",
+        "throttled": false
+      },
+      "process": {
+        "cpuPercentMax": 22.6,
+        "cpuPercentMean": 20.470000000000006,
+        "rssMbMean": 353.14296875,
+        "rssMbPeak": 372.0
+      },
+      "refused": false,
+      "repeat": 0,
+      "report": {
+        "backend": "mpv",
+        "deliveredFrames": 483,
+        "droppedFrames": 0,
+        "endedAt": "2026-08-15T21:15:40Z",
+        "engineVersion": "mpv v0.41.0 Copyright \u00a9 2000-2025 mpv/MPlayer/mplayer2 projects",
+        "expectedFrames": 480,
+        "fixture": "hevc-4k-hdr10.mp4",
+        "output": {
+          "audioChannels": 2,
+          "bitDepth": 10,
+          "colorTransfer": "pq",
+          "height": 1714,
+          "width": 3840
+        },
+        "startedAt": "2026-08-15T21:15:20Z"
+      }
+    },
+    {
+      "backend": "avplayer",
+      "baseline": {
+        "anePowerMw": 0.0,
+        "cpuPowerMw": 27.166666666666668,
+        "eClusterResidency": 10.928500000000001,
+        "gpuPowerMw": 0.0,
+        "pClusterResidency": 1.8079999999999996,
+        "samples": 60,
+        "thermalPressure": "Nominal",
+        "throttled": false
+      },
+      "discardReason": "avplayer: refused this source (exit 3): bench refused: This media format is not supported.",
+      "discarded": true,
+      "droppedFramesReported": null,
+      "fixture": "av1-10bit.mkv",
+      "frameGate": null,
+      "launchAttempts": 1,
+      "power": null,
+      "powerRaw": null,
+      "process": null,
+      "refused": true,
+      "repeat": 0,
+      "report": null
+    },
+    {
+      "backend": "vlckit",
+      "baseline": {
+        "anePowerMw": 0.0,
+        "cpuPowerMw": 27.166666666666668,
+        "eClusterResidency": 10.928500000000001,
+        "gpuPowerMw": 0.0,
+        "pClusterResidency": 1.8079999999999996,
+        "samples": 60,
+        "thermalPressure": "Nominal",
+        "throttled": false
+      },
+      "discardReason": "",
+      "discarded": false,
+      "droppedFramesReported": true,
+      "fixture": "av1-10bit.mkv",
+      "frameGate": {
+        "deliveredFrames": 483,
+        "elapsedSeconds": 20.0,
+        "expectedFramesReal": 480.0,
+        "expectedFramesReported": 480,
+        "expectedFramesUsed": "real elapsed window (endedAt - startedAt) * nominalFrameRate",
+        "nominalMeasureSeconds": 20.0,
+        "passed": true,
+        "ratio": 1.00625,
+        "threshold": 0.95
+      },
+      "launchAttempts": 1,
+      "power": {
+        "anePowerMw": 0.0,
+        "cpuPowerMw": 300.18333333333334,
+        "eClusterResidency": 43.280000000000015,
+        "gpuPowerMw": 138.05,
+        "pClusterResidency": 14.85,
+        "samples": 20,
+        "thermalPressure": "Nominal",
+        "throttled": false
+      },
+      "powerRaw": {
+        "anePowerMw": 0.0,
+        "cpuPowerMw": 327.35,
+        "eClusterResidency": 43.280000000000015,
+        "gpuPowerMw": 138.05,
+        "pClusterResidency": 14.85,
+        "samples": 20,
+        "thermalPressure": "Nominal",
+        "throttled": false
+      },
+      "process": {
+        "cpuPercentMax": 82.3,
+        "cpuPercentMean": 58.885000000000005,
+        "rssMbMean": 211.365625,
+        "rssMbPeak": 213.1875
+      },
+      "refused": false,
+      "repeat": 0,
+      "report": {
+        "backend": "vlckit",
+        "deliveredFrames": 483,
+        "droppedFrames": 0,
+        "endedAt": "2026-08-15T21:19:50Z",
+        "engineVersion": "4.0.0-dev Otto Chriek",
+        "expectedFrames": 480,
+        "fixture": "av1-10bit.mkv",
+        "output": {
+          "audioChannels": 2,
+          "bitDepth": 0,
+          "colorTransfer": "unreported",
+          "height": 858,
+          "width": 1920
+        },
+        "startedAt": "2026-08-15T21:19:30Z"
+      }
+    },
+    {
+      "backend": "ksplayer",
+      "baseline": {
+        "anePowerMw": 0.0,
+        "cpuPowerMw": 27.166666666666668,
+        "eClusterResidency": 10.928500000000001,
+        "gpuPowerMw": 0.0,
+        "pClusterResidency": 1.8079999999999996,
+        "samples": 60,
+        "thermalPressure": "Nominal",
+        "throttled": false
+      },
+      "discardReason": "ksplayer: refused this source (exit 3): bench refused: no decodable format description for an otherwise ready KSMEPlayer video track (known signature of a codec unsupported in this build, e.g. AV1 in the free GPL tier)",
+      "discarded": true,
+      "droppedFramesReported": null,
+      "fixture": "av1-10bit.mkv",
+      "frameGate": null,
+      "launchAttempts": 1,
+      "power": null,
+      "powerRaw": null,
+      "process": null,
+      "refused": true,
+      "repeat": 0,
+      "report": null
+    },
+    {
+      "backend": "mpv",
+      "baseline": {
+        "anePowerMw": 0.0,
+        "cpuPowerMw": 27.166666666666668,
+        "eClusterResidency": 10.928500000000001,
+        "gpuPowerMw": 0.0,
+        "pClusterResidency": 1.8079999999999996,
+        "samples": 60,
+        "thermalPressure": "Nominal",
+        "throttled": false
+      },
+      "discardReason": "",
+      "discarded": false,
+      "droppedFramesReported": true,
+      "fixture": "av1-10bit.mkv",
+      "frameGate": {
+        "deliveredFrames": 481,
+        "elapsedSeconds": 20.0,
+        "expectedFramesReal": 480.0,
+        "expectedFramesReported": 480,
+        "expectedFramesUsed": "real elapsed window (endedAt - startedAt) * nominalFrameRate",
+        "nominalMeasureSeconds": 20.0,
+        "passed": true,
+        "ratio": 1.0020833333333334,
+        "threshold": 0.95
+      },
+      "launchAttempts": 1,
+      "power": {
+        "anePowerMw": 0.0,
+        "cpuPowerMw": 317.5833333333333,
+        "eClusterResidency": 41.03249999999999,
+        "gpuPowerMw": 130.95,
+        "pClusterResidency": 20.9545,
+        "samples": 20,
+        "thermalPressure": "Nominal",
+        "throttled": false
+      },
+      "powerRaw": {
+        "anePowerMw": 0.0,
+        "cpuPowerMw": 344.75,
+        "eClusterResidency": 41.03249999999999,
+        "gpuPowerMw": 130.95,
+        "pClusterResidency": 20.9545,
+        "samples": 20,
+        "thermalPressure": "Nominal",
+        "throttled": false
+      },
+      "process": {
+        "cpuPercentMax": 64.2,
+        "cpuPercentMean": 50.480000000000004,
+        "rssMbMean": 378.609375,
+        "rssMbPeak": 416.25
+      },
+      "refused": false,
+      "repeat": 0,
+      "report": {
+        "backend": "mpv",
+        "deliveredFrames": 481,
+        "droppedFrames": 0,
+        "endedAt": "2026-08-15T21:21:44Z",
+        "engineVersion": "mpv v0.41.0 Copyright \u00a9 2000-2025 mpv/MPlayer/mplayer2 projects",
+        "expectedFrames": 480,
+        "fixture": "av1-10bit.mkv",
+        "output": {
+          "audioChannels": 2,
+          "bitDepth": 10,
+          "colorTransfer": "bt.1886",
+          "height": 858,
+          "width": 1920
+        },
+        "startedAt": "2026-08-15T21:21:24Z"
+      }
+    },
+    {
+      "backend": "aether",
+      "baseline": {
+        "anePowerMw": 0.0,
+        "cpuPowerMw": 27.166666666666668,
+        "eClusterResidency": 10.928500000000001,
+        "gpuPowerMw": 0.0,
+        "pClusterResidency": 1.8079999999999996,
+        "samples": 60,
+        "thermalPressure": "Nominal",
+        "throttled": false
+      },
+      "discardReason": "",
+      "discarded": false,
+      "droppedFramesReported": true,
+      "fixture": "av1-10bit.mkv",
+      "frameGate": {
+        "deliveredFrames": 480,
+        "elapsedSeconds": 20.0,
+        "expectedFramesReal": 479.0,
+        "expectedFramesReported": 479,
+        "expectedFramesUsed": "real elapsed window (endedAt - startedAt) * nominalFrameRate",
+        "nominalMeasureSeconds": 20.0,
+        "passed": true,
+        "ratio": 1.0020876826722338,
+        "threshold": 0.95
+      },
+      "launchAttempts": 1,
+      "power": {
+        "anePowerMw": 0.0,
+        "cpuPowerMw": 295.6333333333333,
+        "eClusterResidency": 45.4765,
+        "gpuPowerMw": 57.6,
+        "pClusterResidency": 15.371500000000003,
+        "samples": 20,
+        "thermalPressure": "Nominal",
+        "throttled": false
+      },
+      "powerRaw": {
+        "anePowerMw": 0.0,
+        "cpuPowerMw": 322.8,
+        "eClusterResidency": 45.4765,
+        "gpuPowerMw": 57.6,
+        "pClusterResidency": 15.371500000000003,
+        "samples": 20,
+        "thermalPressure": "Nominal",
+        "throttled": false
+      },
+      "process": {
+        "cpuPercentMax": 66.1,
+        "cpuPercentMean": 48.84,
+        "rssMbMean": 207.625,
+        "rssMbPeak": 209.609375
+      },
+      "refused": false,
+      "repeat": 0,
+      "report": {
+        "backend": "aether",
+        "deliveredFrames": 480,
+        "droppedFrames": 0,
+        "endedAt": "2026-08-15T21:23:05Z",
+        "engineVersion": "6.26.0",
+        "expectedFrames": 479,
+        "fixture": "av1-10bit.mkv",
+        "output": {
+          "audioChannels": 2,
+          "bitDepth": 8,
+          "colorTransfer": "sdr",
+          "height": 858,
+          "width": 1920
+        },
+        "startedAt": "2026-08-15T21:22:45Z"
+      }
+    }
+  ],
+  "versions": {
+    "aether": "6.26.0",
+    "avplayer": "macOS 26.5.2",
+    "ksplayer": "2.3.4",
+    "mpv": "mpv v0.41.0 Copyright \u00a9 2000-2025 mpv/MPlayer/mplayer2 projects",
+    "vlckit": "4.0.0-alpha.21"
+  }
+}

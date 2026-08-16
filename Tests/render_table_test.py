@@ -395,5 +395,115 @@ class DryRunTests(unittest.TestCase):
         self.assertNotIn("not published data, not published data", out)
 
 
+class CpuPowerColumnDroppedTests(unittest.TestCase):
+    """CPU package power was too noisy at sustained 4K load to publish (see
+    task notes), so the table lost that column entirely: GPU power, CPU
+    load and RSS stayed, plus a Plays column for whether the engine
+    produced a valid run at all. This must be a real column change, not
+    just a relabel, so these check the header and row shape directly.
+    """
+
+    def test_table_header_drops_cpu_power_and_gains_plays(self):
+        out = render_table.render(SAMPLE)
+        self.assertIn("| | GPU power | CPU load | RSS | Plays |", out)
+        self.assertNotIn("| CPU power |", out)
+        self.assertNotIn("peak RSS", out)
+        self.assertNotIn("on E-cores", out)
+
+    def test_valid_cell_row_has_no_cpu_power_value_and_ends_in_yes(self):
+        # AetherEngine's median cpuPowerMw is 1410 (see
+        # test_uses_the_median_of_repeats); that number must not leak into
+        # the row now that the column is gone, even though the same value
+        # is expected to appear elsewhere, in the limitation note's own
+        # evidence sentence.
+        out = render_table.render(SAMPLE)
+        line = next(l for l in out.splitlines() if l.startswith("| **AetherEngine**"))
+        self.assertNotIn("1410 mW", line)
+        self.assertIn("800 mW", line)  # gpuPowerMw, unchanged
+        self.assertTrue(line.rstrip().endswith("| Yes |"))
+
+    def test_invalid_cell_puts_the_na_reason_in_the_plays_column(self):
+        runs = [dict(r, discarded=True, discardReason="frame gate: delivered 900 of 1440")
+                for r in SAMPLE["runs"]]
+        out = render_table.render({**SAMPLE, "runs": runs})
+        line = next(l for l in out.splitlines() if l.startswith("| **AetherEngine**"))
+        self.assertRegex(line, r"^\| \*\*AetherEngine\*\* \| \| \| \| n/a \(.*\) \|$")
+
+    def test_not_run_cell_puts_the_label_in_the_plays_column(self):
+        out = render_table.render(SAMPLE, fixture="h264-1080p.mp4")
+        line = next(l for l in out.splitlines() if l.startswith("| **AetherEngine**"))
+        self.assertRegex(line, r"^\| \*\*AetherEngine\*\* \| \| \| \| not run \|$")
+
+
+class CpuPowerLimitationNoteTests(unittest.TestCase):
+    """The dropped column gets a stated limitation, backed by the real
+    observed spread rather than an unbacked assertion (see
+    _cpu_power_spread_evidence's own docstring for why the widest spread
+    on the fixture, not a fixed backend, is what gets cited).
+    """
+
+    def setUp(self):
+        self.data = load_fixture()
+
+    def test_note_explains_why_the_column_is_missing(self):
+        out = render_table.render(SAMPLE)
+        self.assertIn("CPU package power was measured for every run but is not published", out)
+        self.assertIn("Results/", out)
+
+    def test_note_cites_the_widest_observed_spread_as_evidence(self):
+        # sample-results.json's hevc-4k-hdr10.mp4: AetherEngine 1400-1420
+        # (spread 20), KSPlayer 1630-1650 (spread 20), VLCKit 2190-2210
+        # (spread 20), AVPlayer 895-905 (spread 10), mpv 3000-3010 after
+        # its throttled repeat is discarded (spread 10). AetherEngine wins
+        # the three-way tie only because NAMES lists it first and the
+        # picker requires a strictly wider spread to replace the
+        # incumbent; whitebox-checked directly against the helper so this
+        # doesn't silently start asserting an accident of dict order.
+        table = render_table.summarize(self.data["runs"])
+        evidence = render_table._cpu_power_spread_evidence(table, "hevc-4k-hdr10.mp4")
+        self.assertEqual(evidence, ("AetherEngine", 1400, 1420, 20))
+
+        out = render_table.render(self.data)
+        self.assertIn("on hevc-4k-hdr10.mp4 AetherEngine measured 1400 to 1420 mW", out)
+
+    def test_note_does_not_assert_a_magnitude_the_cited_fixture_contradicts(self):
+        # A light fixture's own real spread can be small (the task this was
+        # written for measured AetherEngine at 44-47 mW on a 1080p
+        # fixture, versus hundreds of mW on the 4K ones); the general
+        # sentence must not hardcode "hundreds of milliwatts" or "4K load"
+        # as if that held for every fixture the note is ever attached to,
+        # since that would sit right next to a small cited number and
+        # contradict it.
+        light_cpu_mw = [44, 45, 47]
+        light = {**SAMPLE, "runs": [
+            {**r, "power": {**r["power"], "cpuPowerMw": light_cpu_mw[r["repeat"]]}}
+            for r in SAMPLE["runs"]]}
+        out = render_table.render(light)
+        self.assertNotIn("hundreds of milliwatts", out)
+        self.assertNotIn("4K load", out)
+        self.assertIn("AetherEngine measured 44 to 47 mW", out)
+
+    def test_note_falls_back_gracefully_with_no_spread_evidence(self):
+        # A cell with only one valid repeat has nothing to take a spread
+        # from; the note must still say CPU power is unpublished, just
+        # without inventing a number to back it.
+        sample = {**SAMPLE, "runs": [SAMPLE["runs"][0]]}
+        out = render_table.render(sample)
+        self.assertIn("CPU package power was measured for every run but is not published", out)
+        self.assertNotIn("For example", out)
+
+    def test_note_sits_in_the_method_notes_near_the_other_power_caveat(self):
+        out = render_table.render(SAMPLE)
+        lines = out.splitlines()
+        package_power_idx = next(
+            i for i, l in enumerate(lines) if l.startswith("Power figures are package power"))
+        cpu_note_idx = next(
+            i for i, l in enumerate(lines)
+            if l.startswith("CPU package power was measured for every run"))
+        versions_idx = next(i for i, l in enumerate(lines) if l.startswith("Versions:"))
+        self.assertLess(versions_idx, package_power_idx)
+        self.assertLess(package_power_idx, cpu_note_idx)
+
+
 if __name__ == "__main__":
     unittest.main()
