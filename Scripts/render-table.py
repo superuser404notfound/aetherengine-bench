@@ -574,6 +574,10 @@ def render(results, fixture="hevc-4k-hdr10.mkv"):
         _cpu_power_limitation_note(table, fixture),
         "libmpv is measured with --hwdec=auto-safe (hardware decode), not mpv's own "
         "software-decode default, see \"Fairness decisions\" in the README.",
+        # A session assembled from more than one run has to say so where the
+        # numbers are read, not only inside the results file.
+        *( [results["mergedFrom"]["note"]]
+           if (results.get("mergedFrom") or {}).get("note") else [] ),
         "Method and raw results: https://github.com/superuser404notfound/aetherengine-bench",
     ]
     return "\n".join(lines)
