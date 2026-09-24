@@ -362,6 +362,45 @@ class SampleProcessTests(unittest.TestCase):
         self.assertGreaterEqual(result["cpuPercentMean"], 0.0)
         self.assertGreater(result["rssMbMean"], 0.0)
 
+    def test_records_footprint_of_a_real_process(self):
+        # 200 MB mapped, touched and unmapped before sampling starts (mmap,
+        # so the release does not depend on the allocator returning pages):
+        # the mean sees the small steady state, the peak still sees it.
+        child = subprocess.Popen([sys.executable, "-c",
+                                  "import mmap\n"
+                                  "m = mmap.mmap(-1, 200 * 1024 * 1024)\n"
+                                  "for i in range(0, len(m), 4096): m[i] = 1\n"
+                                  "m.close()\nprint('ready', flush=True)\n"
+                                  "import time; time.sleep(5)"],
+                                 stdout=subprocess.PIPE, text=True)
+        try:
+            self.assertEqual(child.stdout.readline().strip(), "ready")
+            result = sampler.sample_process(child.pid, 1, interval=0.5)
+        finally:
+            child.kill()
+            child.wait()
+        self.assertGreater(result["footprintMbPeak"], 190)
+        self.assertLess(result["footprintMbMean"], 100)
+
+    def test_unreadable_footprint_is_none_not_zero(self):
+        child = subprocess.Popen(["sleep", "5"])
+        try:
+            with mock.patch.object(sampler, "_read_footprint", return_value=None):
+                result = sampler.sample_process(child.pid, 1, interval=0.5)
+        finally:
+            child.kill()
+            child.wait()
+        self.assertIsNone(result["footprintMbMean"])
+        self.assertIsNone(result["footprintMbPeak"])
+        self.assertGreater(result["rssMbMean"], 0.0)
+
+    def test_footprint_peak_is_the_last_lifetime_maximum(self):
+        agg = sampler.aggregate_footprint([(10.0, 50.0), (20.0, 80.0), (30.0, 80.0)])
+        self.assertEqual(agg["footprintMbMean"], 20.0)
+        self.assertEqual(agg["footprintMbPeak"], 80.0)
+        with self.assertRaises(ValueError):
+            sampler.aggregate_footprint([])
+
     def test_pid_that_never_existed_raises(self):
         child = subprocess.Popen(["sleep", "0.01"])
         pid = child.pid

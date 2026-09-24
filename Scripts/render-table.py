@@ -68,6 +68,15 @@ pretty:
   servers serve MKV; hevc-4k-hdr10.mp4 is rendered as its named second
   block, never as what a bare `render-table.py Results/foo.json`
   produces.
+- A session with an HTTP arm (aetherengine-bench#1) renders both arms of
+  an engine as adjacent rows with a Source column, and states the origin's
+  link rate and latency next to the numbers, because they are a variable
+  of the HTTP rows, not a detail. A session with one arm renders exactly
+  as before, and so does one recorded before arms existed (no "arm" field
+  means the file arm).
+- Peak footprint (the kernel's lifetime maximum, what jetsam acts on) is a
+  column only when the session recorded it; an older session gets no
+  column rather than a column of "not reported".
 """
 import json
 import re
@@ -192,15 +201,30 @@ def _rehabilitate_cpu_power_only_discard(run):
     return {**run, "discarded": False, "power": power}
 
 
+# Mirrors orchestrate.py's ARMS and cell_key(): the file arm keeps the bare
+# fixture name, so a session recorded before arms existed keys identically.
+ARMS = ["file", "http"]
+ARM_LABELS = {"file": "disk", "http": "HTTP"}
+
+
+def cell_key(fixture, arm):
+    return fixture if arm == "file" else f"{fixture}@{arm}"
+
+
+def _run_arm(run):
+    return run.get("arm") or "file"
+
+
 def summarize(runs):
-    """Groups runs by (backend, fixture) and reduces each group to the
+    """Groups runs by (backend, fixture, arm) and reduces each group to the
     figures the table needs: the median over valid (non-discarded) runs
     only, plus enough about the discarded ones that a partial or total
     discard is never silently invisible downstream.
     """
     table = {}
     for run in runs:
-        cell = table.setdefault(run["backend"], {}).setdefault(run["fixture"], {"_runs": []})
+        key = cell_key(run["fixture"], _run_arm(run))
+        cell = table.setdefault(run["backend"], {}).setdefault(key, {"_runs": []})
         cell["_runs"].append(run)
 
     for fixtures in table.values():
@@ -249,6 +273,7 @@ def _finalize_cell(cell):
     cell["gpuPowerMw"] = med(lambda r: (r.get("power") or {}).get("gpuPowerMw"))
     cell["cpuPercent"] = med(lambda r: (r.get("process") or {}).get("cpuPercentMean"), 1)
     cell["rssMb"] = med(lambda r: (r.get("process") or {}).get("rssMbMean"))
+    cell["footprintPeakMb"] = med(lambda r: (r.get("process") or {}).get("footprintMbPeak"))
 
     cell["deliveredFrames"] = med(lambda r: (r.get("report") or {}).get("deliveredFrames"))
     cell["expectedFrames"] = med(lambda r: (r.get("report") or {}).get("expectedFrames"))
@@ -446,13 +471,145 @@ def _cpu_power_limitation_note(table, fixture):
     )
 
 
-def render(results, fixture="hevc-4k-hdr10.mkv"):
+def _session_arms(results, fixture):
+    """The arms this session actually ran for this fixture, in ARMS order.
+    A fixture no run touched still renders (as "not run"), on the file arm."""
+    present = {_run_arm(r) for r in results.get("runs", []) if r.get("fixture") == fixture}
+    return [a for a in ARMS if a in present] or ["file"]
+
+
+def _records_footprint(results):
+    return any("footprintMbPeak" in (r.get("process") or {}) for r in results.get("runs", []))
+
+
+def _origin_desc(results):
+    origin = results.get("origin") or {}
+    if origin.get("mbps") is None:
+        return "over HTTP from a local range origin"
+    return (f"over HTTP from a local range origin at {origin['mbps']:g} Mbit/s shared, "
+            f"{origin.get('latencyMs', 0):g} ms latency per request")
+
+
+def _fixture_desc(results, fixture):
+    """The fixture name, plus its measured overall bitrate when the session
+    recorded one (orchestrate.py's payload["fixtures"])."""
+    info = (results.get("fixtures") or {}).get(fixture) or {}
+    mbps = info.get("mbps")
+    return f"{fixture} ({mbps:.0f} Mbit/s)" if mbps else fixture
+
+
+def _surfaces(results, fixture):
+    return _unique(
+        r.get("report", {}).get("renderPixels")
+        for r in results.get("runs", [])
+        if r.get("fixture") == fixture and not r.get("discarded")
+        and r.get("report", {}).get("renderPixels"))
+
+
+def _window_desc(surfaces):
+    if len(surfaces) == 1:
+        return f"windowed, {surfaces[0]} px rendered"
+    if surfaces:
+        return ("windowed, render surface NOT equal across engines ("
+                + ", ".join(sorted(surfaces)) + "), so the GPU column is not comparable")
+    return "windowed, render surface not recorded by this session"
+
+
+def _render_section(results, table, fixture, with_footprint):
+    """Table, footnotes, launch failures and frame-delivery lines for one
+    fixture, every arm it ran on. Returns (lines, detail_lines)."""
+    arms = _session_arms(results, fixture)
+    multi_arm = len(arms) > 1 or arms != ["file"]
+
+    header = "| |" + (" Source |" if multi_arm else "") + " GPU power | CPU load | RSS |"
+    header += (" Peak footprint |" if with_footprint else "") + " Plays |"
+    columns = header.count("|") - 1
+    lines = [header, "|" + " --- |" * columns]
+
+    def row(first, source, values, plays):
+        cells = [first] + ([source] if multi_arm else []) + values + [plays]
+        return "|" + "|".join(f" {c} " if c else " " for c in cells) + "|"
+
+    blank = [""] * (3 + (1 if with_footprint else 0))
+    footnotes = []
+    detail_lines = []
+    for backend, name in NAMES.items():
+        for index, arm in enumerate(arms):
+            label = f"**{name}**" if index == 0 or not multi_arm else ""
+            source = ARM_LABELS.get(arm, arm)
+            where = f"{fixture}, {source}" if multi_arm else fixture
+            cell = table.get(backend, {}).get(cell_key(fixture, arm))
+            if not cell:
+                lines.append(row(label, source, blank, "not run"))
+                continue
+            if not cell["valid"]:
+                lines.append(row(label, source, blank, f"n/a ({cell['reason']})"))
+                continue
+
+            marker = ""
+            if cell["discardedCount"]:
+                footnotes.append(
+                    f"[{len(footnotes) + 1}] **{name}**, {where}: {cell['discardedCount']} of "
+                    f"{cell['totalRuns']} repeat(s) discarded and excluded from the figures above "
+                    f"({'; '.join(cell['discardedReasons'])}).")
+                marker = f" [{len(footnotes)}]"
+            if multi_arm:
+                source += marker
+            else:
+                label += marker
+
+            values = [_fmt_mw(cell['gpuPowerMw']), f"{_fmt_pct(cell['cpuPercent'])} of a core",
+                      _fmt_mb(cell['rssMb'])]
+            if with_footprint:
+                values.append(_fmt_mb(cell.get('footprintPeakMb')))
+            lines.append(row(label, source, values, "Yes"))
+            detail_lines.append(_format_detail(f"{name}, {ARM_LABELS.get(arm, arm)}" if multi_arm else name,
+                                               cell))
+
+    lines.append("")
+    if footnotes:
+        lines.extend(footnotes)
+        lines.append("")
+
+    # Placed directly under the table it concerns, not down by the
+    # versions/method notes, and scoped to this fixture only (see
+    # _fixture_launch_failures's own docstring for why a session-wide sum
+    # would misattribute failures to fixtures that never had any). What
+    # counts as a launch failure versus a refusal, and why the two are
+    # counted so differently, is spelled out in the README rather than
+    # here, see the module docstring.
+    fails = []
+    for arm in arms:
+        for name, n in _fixture_launch_failures(results.get("launchFailures") or {}, cell_key(fixture, arm)):
+            fails.append(f"{name} {n}" + (f" ({ARM_LABELS.get(arm, arm)})" if multi_arm else ""))
+    if fails:
+        lines += [
+            f"Launch failures on {fixture} (crashes that were retried, not refusals, see the "
+            f"README): {', '.join(fails)}.",
+            "",
+        ]
+    return lines, detail_lines
+
+
+def _detail_block(detail_lines):
+    if not detail_lines:
+        return []
+    return ["Frame delivery and output (median; resolution, bit depth and HDR transfer are "
+            "informational per engine only, shown as 'varies across repeats' when they "
+            "disagree, see the README):"] + detail_lines + [""]
+
+
+def render(results, fixture="hevc-4k-hdr10.mkv", fixtures=None):
+    """One published block. `fixtures` renders several fixtures of one
+    session under one header and one set of notes; `fixture` alone is the
+    single-fixture block this renderer has always produced."""
+    fixtures = list(fixtures or [fixture])
     table = summarize(results.get("runs", []))
     protocol = results.get("protocol") or {}
     measure_s = protocol.get("measure")
     if measure_s is None:
         measure_s = 60
-    repeats = protocol.get("repeats") or _infer_repeats(table, fixture) or 3
+    repeats = protocol.get("repeats") or _infer_repeats(table, fixtures[0]) or 3
     machine = results.get("machine", "unknown machine")
     # machdep.cpu.brand_string names the SoC, not the chassis: a MacBook Air
     # and a MacBook Pro can share a chip but not a thermal design.
@@ -461,6 +618,7 @@ def render(results, fixture="hevc-4k-hdr10.mkv"):
     machine_model = results.get("machineModel")
     machine_desc = f"{machine} ({machine_model})" if machine_model else machine
     os_version = results.get("os", "unknown OS")
+    with_footprint = _records_footprint(results)
 
     lines = []
     if results.get("dryRun"):
@@ -475,21 +633,20 @@ def render(results, fixture="hevc-4k-hdr10.mkv"):
     # by the size that was requested. Those differ: AppKit takes points and
     # renders at the backing scale. A hardcoded "1920x1080" here once described
     # a 3840x2160 surface for four engines and a 1920x1080 one for the fifth.
-    surfaces = _unique(
-        r.get("report", {}).get("renderPixels")
-        for r in results.get("runs", [])
-        if r.get("fixture") == fixture and not r.get("discarded")
-        and r.get("report", {}).get("renderPixels"))
-    if len(surfaces) == 1:
-        window_desc = f"windowed, {surfaces[0]} px rendered"
-    elif surfaces:
-        window_desc = ("windowed, render surface NOT equal across engines ("
-                       + ", ".join(sorted(surfaces)) + "), so the GPU column is not comparable")
+    any_http = any(a != "file" for f in fixtures for a in _session_arms(results, f))
+    if len(fixtures) == 1:
+        subject = _fixture_desc(results, fixtures[0]) if any_http or results.get("fixtures") else fixtures[0]
+        if any_http:
+            subject += ", from local disk and " + _origin_desc(results)
+        surfaces = _surfaces(results, fixtures[0])
     else:
-        window_desc = "windowed, render surface not recorded by this session"
+        subject = ", ".join(_fixture_desc(results, f) for f in fixtures)
+        if any_http:
+            subject += ", each from local disk and " + _origin_desc(results)
+        surfaces = _unique(s for f in fixtures for s in _surfaces(results, f))
     lines.append(
         f"Measured on {machine_desc}, macOS {os_version}, "
-        f"{fixture}, {window_desc}, {measure_s:.0f} s, median of {repeats}.")
+        f"{subject}, {_window_desc(surfaces)}, {measure_s:.0f} s, median of {repeats}.")
     if machine_model:
         # "Fanless" only prints when there is a model identifier a reader
         # can check it against: an unbacked chassis/thermal-design claim
@@ -500,65 +657,19 @@ def render(results, fixture="hevc-4k-hdr10.mkv"):
         lines.append(
             f"{machine_model} is fanless: sustained decode can reach thermal pressure, which is "
             "why the protocol has cooldowns between runs and discards throttled windows.")
-
-    lines += [
-        "",
-        "| | GPU power | CPU load | RSS | Plays |",
-        "| --- | --- | --- | --- | --- |",
-    ]
-
-    footnotes = []
-    detail_lines = []
-    for backend, name in NAMES.items():
-        cell = table.get(backend, {}).get(fixture)
-        if not cell:
-            lines.append(f"| **{name}** | | | | not run |")
-            continue
-        if not cell["valid"]:
-            lines.append(f"| **{name}** | | | | n/a ({cell['reason']}) |")
-            continue
-
-        marker = ""
-        if cell["discardedCount"]:
-            footnotes.append(
-                f"[{len(footnotes) + 1}] **{name}**, {fixture}: {cell['discardedCount']} of "
-                f"{cell['totalRuns']} repeat(s) discarded and excluded from the figures above "
-                f"({'; '.join(cell['discardedReasons'])}).")
-            marker = f" [{len(footnotes)}]"
-
-        lines.append(
-            f"| **{name}**{marker} | {_fmt_mw(cell['gpuPowerMw'])} | "
-            f"{_fmt_pct(cell['cpuPercent'])} of a core | {_fmt_mb(cell['rssMb'])} | Yes |")
-        detail_lines.append(_format_detail(name, cell))
-
     lines.append("")
-    if footnotes:
-        lines.extend(footnotes)
-        lines.append("")
 
-    # Placed directly under the table it concerns, not down by the
-    # versions/method notes, and scoped to this fixture only (see
-    # _fixture_launch_failures's own docstring for why a session-wide sum
-    # would misattribute failures to fixtures that never had any). What
-    # counts as a launch failure versus a refusal, and why the two are
-    # counted so differently, is spelled out in the README rather than
-    # here, see the module docstring.
-    launch_failures = _fixture_launch_failures(results.get("launchFailures") or {}, fixture)
-    if launch_failures:
-        fails = ", ".join(f"{name} {n}" for name, n in launch_failures)
-        lines += [
-            f"Launch failures on {fixture} (crashes that were retried, not refusals, see the "
-            f"README): {fails}.",
-            "",
-        ]
-
-    if detail_lines:
-        lines.append(
-            "Frame delivery and output (median; resolution, bit depth and HDR transfer are "
-            "informational per engine only, shown as 'varies across repeats' when they "
-            "disagree, see the README):")
-        lines.extend(detail_lines)
-        lines.append("")
+    details = []
+    for f in fixtures:
+        if len(fixtures) > 1:
+            lines += [f"**{_fixture_desc(results, f)}**", ""]
+        section, detail_lines = _render_section(results, table, f, with_footprint)
+        lines += section
+        if len(fixtures) > 1 and detail_lines:
+            details += [f"*{f}*"] + detail_lines
+        else:
+            details += detail_lines
+    lines += _detail_block(details)
 
     # Versions come from the results file, where orchestrate.py derived them
     # from repository state. Never from a string typed by hand into a backend.
@@ -571,9 +682,17 @@ def render(results, fixture="hevc-4k-hdr10.mkv"):
         "",
         "Power figures are package power with an idle baseline subtracted, so they are "
         "attributable to the run and not to the machine.",
-        _cpu_power_limitation_note(table, fixture),
+        _cpu_power_limitation_note(table, fixtures[0]),
         "libmpv is measured with --hwdec=auto-safe (hardware decode), not mpv's own "
         "software-decode default, see \"Fairness decisions\" in the README.",
+    ]
+    if with_footprint:
+        lines.append(
+            "Peak footprint is the kernel's lifetime maximum of the player process's physical "
+            "footprint (what the system's memory limit acts on), load phase included; RSS is the "
+            "mean over the measured window. Decoding that happens in a system service "
+            "(VideoToolbox) is in neither.")
+    lines += [
         # A session assembled from more than one run has to say so where the
         # numbers are read, not only inside the results file.
         *( [results["mergedFrom"]["note"]]
@@ -584,5 +703,8 @@ def render(results, fixture="hevc-4k-hdr10.mkv"):
 
 
 if __name__ == "__main__":
+    # render-table.py <results.json> [fixture ...]: no fixture is the headline
+    # block, several share one header and one set of notes.
     with open(sys.argv[1]) as f:
-        print(render(json.load(f)))
+        data = json.load(f)
+    print(render(data, fixtures=sys.argv[2:] or None))

@@ -89,9 +89,23 @@ struct BenchArguments {
             throw ParseError.badValue("display", displayRaw)
         }
 
+        // A path is a local file; an http(s) URL is the HTTP arm, served by
+        // Scripts/range-origin.py. Media servers deliver over HTTP, and at
+        // least AetherEngine reads the two through different code.
+        let urlRaw = try need("url")
+        let url: URL
+        if urlRaw.hasPrefix("http://") || urlRaw.hasPrefix("https://") {
+            guard let remote = URL(string: urlRaw), remote.host != nil else {
+                throw ParseError.badValue("url", urlRaw)
+            }
+            url = remote
+        } else {
+            url = URL(fileURLWithPath: urlRaw)
+        }
+
         return BenchArguments(
             backend: backend,
-            url: URL(fileURLWithPath: try need("url")),
+            url: url,
             settle: try seconds("settle", default: 15),
             measure: try seconds("measure", default: 60),
             windowSize: CGSize(width: parts[0], height: parts[1]),

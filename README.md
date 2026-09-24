@@ -21,6 +21,19 @@ Each cell in the table is one (engine, fixture) pair. For every cell:
 
 None of this is ceremony. Every one of these exists because it was observed to matter on this specific machine, most of them are cited with the actual number that motivated them in the source, mainly `Scripts/orchestrate.py` and `Scripts/sampler.py`, which are the ground truth if this document and the code ever disagree.
 
+### Two ways in: from disk and over HTTP
+
+Media servers deliver over HTTP, and an engine's network path is not its file path: AetherEngine, for one, reads a `file://` URL with one reader and an `http` URL with another that keeps a persistent range connection and a read window. A session can therefore run every fixture in two arms (`--arms file,http`):
+
+- **disk**: the engine opens the fixture from `Fixtures/`, as every session before this one did.
+- **HTTP**: the engine opens `http://127.0.0.1:<port>/<fixture>` from `Scripts/range-origin.py`, started by the orchestrator for the whole session. Every engine gets the same URL. The origin answers `bytes=a-b`, `bytes=a-` and `bytes=-n` with 206 and `Content-Range`, keeps connections alive like a media server, and is threaded. It is a link, not a memory copy: every response header waits a fixed latency, and one rate is shared across all connections on a virtual clock, so a second connection gets no free bandwidth. The defaults, 1000 Mbit/s and 20 ms (`--origin-mbps`, `--origin-latency-ms`), stand for a wired LAN to a media server. The session file records them under `origin`, and the rendered block prints them next to the numbers, because they are a variable of the HTTP rows.
+
+Each (fixture, arm) pair is its own block with its own idle baseline, and the engine rotation advances across blocks exactly as it did across fixtures.
+
+### Peak footprint
+
+Alongside mean RSS from `ps`, every run records the player process's physical footprint through `proc_pid_rusage`: the mean over the window, and the kernel's lifetime maximum (`ri_lifetime_max_phys_footprint`, the "peak memory footprint" `/usr/bin/time -l` prints). Footprint is what the system's memory limit acts on, on iOS and tvOS a process is killed on it, and it is not RSS: it counts dirty and compressed memory and leaves out clean file-backed pages. The two can move independently, and AetherEngine's 7.15.2 fix to its HTTP read window is the measured case (peak footprint fell by 330 to 420 MB, mean RSS barely moved). The peak includes the load phase on purpose, since a process that peaks while opening a file is killed there.
+
 ## The machine
 
 MacBook Air (M1), 4 efficiency + 4 performance cores, macOS 26.5.2. It is **fanless**, which is load-bearing: sustained decode at 4K can push it into thermal throttling within a single measurement window, and there is no active cooling to pull it back down between runs. That is the entire reason this protocol has cooldowns and a throttling discard rule at all; on a machine with a fan neither would need to exist in this form. It also means the results describe this machine's thermal ceiling, not a generic "M1", and are not directly comparable to a fanned M1 laptop.
@@ -56,7 +69,7 @@ sudo visudo -f /etc/sudoers.d/aetherengine-bench
 sudo Scripts/run-bench.sh
 ```
 
-Root is required for the whole session, not only for the `powermetrics` calls: every player is then launched demoted back to the invoking user via `sudo -u` (see `demote()` in `Scripts/orchestrate.py`), because a root-owned GPU-accelerated player is not how any of these five engines are actually used and would make the numbers unrepresentative. A shortened, clearly-labelled dry run for checking that the pipeline itself works is:
+Under `sudo`, every player is launched demoted back to the invoking user via `sudo -u` (see `demote()` in `Scripts/orchestrate.py`), because a root-owned GPU-accelerated player is not how any of these five engines are actually used and would make the numbers unrepresentative. With the grant from step 2 in place the session can also run as the invoking user, `Scripts/run-bench.sh` without `sudo`: `powermetrics` is then the only privileged call, the players need no demotion at all, and an unattended session no longer needs an interactive root shell to start. Both modes launch the players as the same user. A shortened, clearly-labelled dry run for checking that the pipeline itself works is:
 
 ```bash
 sudo Scripts/run-bench.sh --dry-run --settle 2 --measure 5 --cooldown 2 --repeats 1 --fixtures h264-1080p.mp4
@@ -100,6 +113,9 @@ Stated without hedging, because a benchmark that only lists its own strengths is
 - **KSPlayer's paid LGPL tier is not measured**, see above.
 - **The HDR10 and Dolby Vision fixtures are synthetically signalled, not natively graded.** The source master is SDR; PQ/BT.2020 transfer characteristics, mastering-display metadata, and (for the Dolby Vision fixture) a generated RPU are applied on top of it. These fixtures exercise the decode and display-pipeline paths that real HDR/DV content would, but they are not real graded masters and should not be read as evidence about how any engine handles authored HDR content.
 - **CPU package power is measured and recorded for every run, but not published in the rendered table.** It is the one power figure whose repeat-to-repeat spread, at sustained 4K load on this fanless machine, has been observed wide enough to exceed the differences between engines it would be used to show. In the committed session, AetherEngine's own repeats on `hevc-4k-hdr10.mkv` ranged from 65 to 291 mW, and VLCKit's on `hevc-4k-hdr10.mp4` ranged from 23 to 463 mW; a spread of that size on one engine's own repeated measurement of itself cannot support a cross-engine comparison. The underlying cause (the idle baseline is sampled once per fixture block, while the SoC's temperature drifts with load over the course of that block) scales with how demanding the fixture is: a light 1080p fixture's own spread can be small, AetherEngine measured 44 to 47 mW on `h264-1080p.mp4` in the same session, but the column is dropped for every fixture uniformly rather than kept where it happens to look stable. GPU power, CPU load and RSS did not show this problem on any of the eight fixtures in the committed session and are published instead. The raw CPU power numbers are still in `Results/`, for anyone who wants to look at them with that caveat in mind.
+- **The HTTP arm is a modelled link on loopback, not a network.** It has latency and a shared rate, but no packet loss, no TCP congestion behaviour and no Wi-Fi. It separates an engine's network reader from its file reader; it does not predict a particular home network.
+- **The origin's own CPU shows up in package power, not in any engine's process figures.** The idle baseline is taken with the origin idle, so on the HTTP rows the CPU package power (which is not published anyway, see above) includes the origin's work for however many bytes the engine pulled. GPU power, CPU load, RSS and footprint are unaffected.
+- **The 90 Mbit/s fixture is re-encoded from the 38 Mbit/s one with light film grain added** (`Scripts/make-fixtures.sh`, step 2c), because the animation alone does not need that rate. Same frames, audio and HDR signalling, so the pair differs in bitrate only; it is still not a real remux.
 - **Two repeats per cell in the published session.** That is few. A median of 2 is closer to "these two runs agreed" than to a statistically solid estimate, and it is the number actually in the committed session file, not a larger number quoted from elsewhere.
 
 ## Where the raw data is
@@ -109,12 +125,13 @@ Stated without hedging, because a benchmark that only lists its own strengths is
 - `machine` / `machineModel` / `os`: `machdep.cpu.brand_string` (the SoC, e.g. "Apple M1"), `hw.model` (the actual chassis, e.g. "MacBookAir10,1", which is what the fanless claim is checked against), and the macOS version.
 - `versions`: each engine's version, derived from repository/checkout state (git tag for AetherEngine, `Package.resolved` pins for VLCKit/KSPlayer, `sw_vers`/`mpv --version` for AVPlayer/libmpv), never typed by hand.
 - `protocol`: the exact settle/measure/cooldown/repeats/gate-threshold/linger values this session ran with.
-- `launchFailures`: crash counts, keyed by backend then fixture, counted whether or not a later retry succeeded.
+- `launchFailures`: crash counts, keyed by backend then fixture (`<fixture>@http` for the HTTP arm), counted whether or not a later retry succeeded.
+- `arms`, `origin`, `fixtures`: which arms ran, the HTTP origin's link rate and latency, and each fixture's size and overall bitrate as ffprobe reads it.
 - `runs`: one record per measured attempt (including discarded ones), each carrying:
-  - `backend`, `fixture`, `repeat`, `refused`, `launchAttempts`, `discarded`, `discardReason`.
+  - `backend`, `fixture`, `arm` (`file` or `http`; absent in sessions recorded before arms existed, which were all `file`), `repeat`, `refused`, `launchAttempts`, `discarded`, `discardReason`.
   - `baseline`: the idle power/thermal reading subtracted for this run's fixture block.
   - `power`: baseline-subtracted package power and cluster residency (what a valid run's table figures come from); `powerRaw`: the same, unsubtracted.
-  - `process`: per-process CPU% and RSS from `ps`, mean and peak.
+  - `process`: per-process CPU% and RSS from `ps`, mean and peak, plus `footprintMbMean` and `footprintMbPeak` from `proc_pid_rusage` (None, never 0, when the kernel would not report them).
   - `report`: the player's own self-report, delivered/dropped/expected frames, resolution, bit depth, color transfer, serving path where applicable.
   - `frameGate`: the recomputed pass/fail evaluation behind the frame-delivery discard rule.
 
