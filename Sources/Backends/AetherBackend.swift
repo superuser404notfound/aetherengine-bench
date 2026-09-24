@@ -2,23 +2,13 @@ import AetherEngine
 import AppKit
 import Combine
 
-/// Convenience label only. `AetherEngine` exposes no runtime version API
-/// (checked against the whole `Sources/AetherEngine` tree and `docs/api.md`
-/// at the pinned revision, not just the docs), so this cannot be read live
-/// and must not try to be (no `git describe` shell-out from the backend).
-/// The version the benchmark actually publishes comes from `orchestrate.py`,
-/// which derives it from repository state at report time (`git describe`
-/// against `.build/SourcePackages/checkouts/AetherEngine`, which is already
-/// a tag-complete clone the build produced). This literal mirrors the tag
-/// the pin in `project.yml` currently resolves to, for anyone reading a
-/// standalone `AetherBench` report outside that pipeline; it is not the
-/// source of truth and can go stale if `project.yml`'s `revision:` moves
-/// without a matching edit here.
-private let aetherEngineReleaseVersion = "6.26.0"
-
 @MainActor
 final class AetherBackend: BenchBackend {
-    static var engineVersion: String { aetherEngineReleaseVersion }
+    /// `AetherEngine.version` exists since 7.3.0 and is checked against the
+    /// README and CHANGELOG by the engine's own tests, so a standalone report
+    /// names the build it ran. The published version still comes from
+    /// `orchestrate.py` (`git describe` on the SwiftPM checkout).
+    static var engineVersion: String { AetherEngine.version }
 
     private let engine: AetherEngine
     private let surface = AetherPlayerView()

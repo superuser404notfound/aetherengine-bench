@@ -51,9 +51,30 @@ PLAYER_COMM["mpv"] = "mpv"
 
 DEFAULT_FIXTURES = [
     "hevc-4k-hdr10.mp4", "hevc-4k-hdr10.mkv", "h264-1080p.mp4", "av1-10bit.mkv", "vp9.webm",
-    "hevc-subs.mkv", "eac3-51.mp4", "dv-p81.mp4",
+    "hevc-subs.mkv", "eac3-51.mp4", "dv-p81.mp4", "hevc-4k-hdr10-90m.mp4", "hevc-4k-hdr10-90m.mkv",
 ]
 BACKENDS = ["aether", "avplayer", "vlckit", "ksplayer", "mpv"]
+
+# How a fixture reaches the engine. "file" opens it from disk; "http" serves the
+# same file through Scripts/range-origin.py, because media servers deliver over
+# HTTP and an engine's network reader is different code from its file reader
+# (aetherengine-bench#1). Every engine gets the identical URL.
+ARMS = ["file", "http"]
+DEFAULT_ARMS = ["file"]
+
+# The origin's link. 1 Gbit/s and 20 ms are the conditions the AetherEngine #620
+# measurement ran under (a fast LAN to a media server, not a loopback memory
+# copy), so the published arm and the engine-side finding share one link.
+DEFAULT_ORIGIN_MBPS = 1000.0
+DEFAULT_ORIGIN_LATENCY_MS = 20.0
+DEFAULT_ORIGIN_PORT = 8917
+
+
+def cell_key(fixture, arm):
+    """The key a (fixture, arm) block is counted and rendered under. The file
+    arm keeps the bare fixture name, so every session recorded before arms
+    existed reads exactly as it did."""
+    return fixture if arm == "file" else f"{fixture}@{arm}"
 
 REQUIRED_REPORT_FIELDS = (
     "deliveredFrames", "droppedFrames", "expectedFrames",
@@ -327,6 +348,11 @@ def find_player_pid(root_pid, comm_name, table_fn=_process_table):
     into a published per-engine figure.
     """
     rows = table_fn()
+    # Without a sudo wrapper (a session run as the invoking user, see
+    # demote()) the Popen pid IS the player for the four Swift binaries.
+    for pid, _ppid, comm in rows:
+        if pid == root_pid and os.path.basename(comm) == comm_name:
+            return pid
     frontier = {root_pid}
     seen = set()
     while frontier:
@@ -736,17 +762,32 @@ def evaluate_run(power, report, load_error, process_error, backend, fixture, cfg
     return reasons, frame_gate
 
 
-def measure_once(backend, fixture, repeat, baseline, cfg, launch_failures, report_dir, baseline_error=None):
-    fixture_path = str(ROOT / "Fixtures" / fixture)
+def measure_once(backend, fixture, repeat, baseline, cfg, launch_failures, report_dir, baseline_error=None,
+                 arm="file", origin_url=None, temp_dir=None):
+    try:
+        return _measure_once(backend, fixture, repeat, baseline, cfg, launch_failures, report_dir,
+                             baseline_error, arm, origin_url)
+    finally:
+        purged = purge_engine_temp(temp_dir)
+        if purged:
+            print(f"    purged {purged / 1e6:.0f} MB of engine temp files after {backend}")
+
+
+def _measure_once(backend, fixture, repeat, baseline, cfg, launch_failures, report_dir, baseline_error,
+                  arm, origin_url):
+    if arm == "file":
+        fixture_path = str(ROOT / "Fixtures" / fixture)
+    else:
+        fixture_path = f"{origin_url}/{fixture}"
     stamp = int(time.time() * 1000)
 
     def report_path_for_attempt(attempt):
-        return str(report_dir / f"bench-{backend}-{pathlib.Path(fixture).stem}-{repeat}-{attempt}-{stamp}.json")
+        return str(report_dir / f"bench-{backend}-{pathlib.Path(fixture).stem}-{arm}-{repeat}-{attempt}-{stamp}.json")
 
     proc, player_pid, attempts, report_path, launch_reason, refused = launch_with_retry(
-        backend, fixture, fixture_path, report_path_for_attempt, cfg, launch_failures)
+        backend, cell_key(fixture, arm), fixture_path, report_path_for_attempt, cfg, launch_failures)
 
-    record = {"backend": backend, "fixture": fixture, "repeat": repeat,
+    record = {"backend": backend, "fixture": fixture, "arm": arm, "repeat": repeat,
               "baseline": baseline, "launchAttempts": attempts, "refused": refused}
     if proc is None:
         if refused:
@@ -876,6 +917,11 @@ def demote():
     Falling back to it would silently demote to root, defeating the whole
     point and doing so quietly.
     """
+    if os.geteuid() != 0:
+        # Already the invoking user (main() only allows this once the
+        # powermetrics NOPASSWD grant is confirmed), so there is nothing to
+        # drop and no wrapper process between Popen and the player.
+        return []
     target = os.environ.get("SUDO_USER")
     if not target:
         sys.exit("orchestrate.py: SUDO_USER is not set; refusing to guess who to "
@@ -900,11 +946,98 @@ def write_results(out_path, payload):
     os.replace(tmp, out_path)
 
 
-def run_session(cfg, fixtures, backends, output_dir, dry_run=False, report_dir=pathlib.Path("/tmp")):
+# Caches AetherEngine writes under the player's temp dir: HLS segments for the
+# native path, the software path's packet spool. A process that is signalled
+# rather than stopped leaves them behind (every run here ends in SIGTERM), and
+# one 90 Mbit/s block leaves gigabytes; a full disk then fails segment writes
+# silently and fakes wedges in whatever engine runs next.
+ENGINE_TEMP_PREFIXES = ("aether-segments", "aether-software-packets-")
+
+
+def player_temp_dir():
+    """The darwin per-user temp dir of the user the players run as, which is
+    not this process's when it runs as root."""
+    try:
+        out = subprocess.run(demote() + ["getconf", "DARWIN_USER_TEMP_DIR"], capture_output=True,
+                             text=True, timeout=10, stdin=subprocess.DEVNULL).stdout.strip()
+        return pathlib.Path(out) if out else None
+    except Exception:
+        return None
+
+
+def purge_engine_temp(temp_dir):
+    """Removes the engine caches listed above from temp_dir. Returns the
+    bytes removed, so a run that left gigabytes behind is visible."""
+    import shutil
+    if temp_dir is None or not temp_dir.is_dir():
+        return 0
+    removed = 0
+    for entry in temp_dir.iterdir():
+        if not entry.name.startswith(ENGINE_TEMP_PREFIXES):
+            continue
+        for f in entry.rglob("*") if entry.is_dir() else [entry]:
+            try:
+                removed += f.stat().st_size if f.is_file() else 0
+            except OSError:
+                pass
+        shutil.rmtree(entry, ignore_errors=True) if entry.is_dir() else entry.unlink(missing_ok=True)
+    return removed
+
+
+def fixture_info(path):
+    """Size and overall bitrate of a fixture, read with ffprobe, so a block
+    that says "a 90 Mbit/s fixture" is quoting the file, not the encode
+    command. None fields (never zeros) when the file or ffprobe is missing."""
+    info = {"bytes": None, "durationS": None, "mbps": None}
+    try:
+        info["bytes"] = os.path.getsize(path)
+        out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration,bit_rate",
+                              "-of", "json", str(path)], capture_output=True, text=True, timeout=60)
+        fmt = json.loads(out.stdout).get("format", {})
+        info["durationS"] = float(fmt["duration"])
+        info["mbps"] = int(fmt["bit_rate"]) / 1_000_000
+    except Exception:
+        pass
+    return info
+
+
+def start_origin(mbps, latency_ms, port, log_path):
+    """Starts Scripts/range-origin.py over Fixtures/ and waits until it
+    accepts connections. Returns (Popen, base URL). The origin's CPU lands in
+    package power, which the idle baseline (taken with it idle) does not
+    subtract; that is why only per-process figures and GPU power are
+    published for the HTTP arm, see the README."""
+    import socket
+    log = open(log_path, "a")
+    proc = subprocess.Popen(demote() + [sys.executable, str(ROOT / "Scripts/range-origin.py"),
+                                         str(ROOT / "Fixtures"), str(port), str(mbps), str(latency_ms)],
+                            stdout=subprocess.DEVNULL, stderr=log)
+    log.close()
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        if proc.poll() is not None:
+            raise RuntimeError(f"range origin exited at startup (exit {proc.returncode}), see {log_path}")
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                return proc, f"http://127.0.0.1:{port}"
+        except OSError:
+            time.sleep(0.1)
+    proc.kill()
+    raise RuntimeError(f"range origin did not accept connections on :{port} within 10s")
+
+
+def run_session(cfg, fixtures, backends, output_dir, dry_run=False, report_dir=pathlib.Path("/tmp"),
+                arms=None, origin_mbps=DEFAULT_ORIGIN_MBPS, origin_latency_ms=DEFAULT_ORIGIN_LATENCY_MS,
+                origin_port=DEFAULT_ORIGIN_PORT):
     """Runs the full matrix and returns the path it wrote. Split out of
     main() so it can be driven without argparse/the root check, e.g. by a
     caller that has already set up its own environment.
+
+    The matrix is fixture x arm x backend: each (fixture, arm) pair is its
+    own block with its own idle baseline, and the rotation offset advances
+    across blocks, exactly as it did across fixtures before arms existed.
     """
+    arms = list(arms or DEFAULT_ARMS)
     for f in fixtures:
         if not (ROOT / "Fixtures" / f).exists():
             print(f"warning: fixture does not exist on disk: {f} (runs against it will "
@@ -915,7 +1048,7 @@ def run_session(cfg, fixtures, backends, output_dir, dry_run=False, report_dir=p
     # launch_with_retry's docstring for why that misattributes failures) or
     # drop the information entirely. Nested by backend then fixture because
     # JSON object keys must be strings, not tuples.
-    launch_failures = {b: {f: 0 for f in fixtures} for b in backends}
+    launch_failures = {b: {cell_key(f, a): 0 for f in fixtures for a in arms} for b in backends}
     records = []
 
     machine = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"],
@@ -944,6 +1077,13 @@ def run_session(cfg, fixtures, backends, output_dir, dry_run=False, report_dir=p
         "os": os_version, "protocol": dataclasses.asdict(cfg),
         "launchFailures": launch_failures, "runs": records,
     }
+    if "http" in arms:
+        # The link is part of what the HTTP arm measured, so it is stated in
+        # the session, not only in a default somewhere in this file.
+        payload["origin"] = {"mbps": origin_mbps, "latencyMs": origin_latency_ms,
+                             "server": "Scripts/range-origin.py", "keepAlive": True}
+    payload["arms"] = arms
+    payload["fixtures"] = {f: fixture_info(ROOT / "Fixtures" / f) for f in fixtures}
     if dry_run:
         payload["dryRun"] = True
         payload["note"] = "shortened validation run (see --settle/--measure/--cooldown/--repeats), not published data"
@@ -951,36 +1091,69 @@ def run_session(cfg, fixtures, backends, output_dir, dry_run=False, report_dir=p
     write_results(out, payload)
     print(f"results file: {out}")
 
-    for fixture_index, fixture in enumerate(fixtures):
-        print(f"=== {fixture}: idle baseline")
-        baseline, baseline_error = take_clean_baseline(cfg, cool_and_retry=lambda: time.sleep(cfg.cooldown))
-        if baseline_error:
-            print(f"  WARNING: {fixture}'s idle baseline never became clean after retries "
-                  f"({baseline_error}); this fixture's power figures will be marked unusable, "
-                  f"not silently subtracted")
-        for repeat in range(cfg.repeats):
-            # Rotation offset advances across the WHOLE session (fixture_index
-            # folded in), not just within one fixture's repeats: with a fixed
-            # `repeat % len(backends)` offset, the same backend always starts
-            # first at a given repeat index in every fixture's block, so
-            # accumulated thermal drift across the full multi-hour session
-            # would still slightly favor that backend's position.
-            offset = (fixture_index * cfg.repeats + repeat) % len(backends)
-            order = backends[offset:] + backends[:offset]
-            for backend in order:
-                if repeat == 0:
-                    print(f"  {backend}: cold throwaway run")
-                    measure_once(backend, fixture, -1, baseline, cfg, launch_failures, report_dir, baseline_error)
+    origin, origin_url = None, None
+    if "http" in arms:
+        origin_log = report_dir / f"aetherengine-bench-origin-{date}.log"
+        origin, origin_url = start_origin(origin_mbps, origin_latency_ms, origin_port, origin_log)
+        print(f"range origin: {origin_url}, {origin_mbps:g} Mbit/s, {origin_latency_ms:g} ms, log {origin_log}")
+
+    temp_dir = player_temp_dir()
+    purge_engine_temp(temp_dir)
+    blocks = [(f, a) for f in fixtures for a in arms]
+    try:
+        for block_index, (fixture, arm) in enumerate(blocks):
+            label = cell_key(fixture, arm)
+            print(f"=== {label}: idle baseline")
+            baseline, baseline_error = take_clean_baseline(cfg, cool_and_retry=lambda: time.sleep(cfg.cooldown))
+            if baseline_error:
+                print(f"  WARNING: {label}'s idle baseline never became clean after retries "
+                      f"({baseline_error}); this block's power figures will be marked unusable, "
+                      f"not silently subtracted")
+            for repeat in range(cfg.repeats):
+                # Rotation offset advances across the WHOLE session (block_index
+                # folded in), not just within one block's repeats: with a fixed
+                # `repeat % len(backends)` offset, the same backend always starts
+                # first at a given repeat index in every block, so accumulated
+                # thermal drift across the full multi-hour session would still
+                # slightly favor that backend's position.
+                offset = (block_index * cfg.repeats + repeat) % len(backends)
+                order = backends[offset:] + backends[:offset]
+                for backend in order:
+                    if repeat == 0:
+                        print(f"  {backend}: cold throwaway run")
+                        measure_once(backend, fixture, -1, baseline, cfg, launch_failures, report_dir,
+                                     baseline_error, arm=arm, origin_url=origin_url, temp_dir=temp_dir)
+                        write_results(out, payload)
+                        time.sleep(cfg.cooldown)
+                    print(f"  {backend}: repeat {repeat}")
+                    records.append(measure_once(backend, fixture, repeat, baseline, cfg, launch_failures,
+                                                 report_dir, baseline_error, arm=arm, origin_url=origin_url,
+                                                 temp_dir=temp_dir))
                     write_results(out, payload)
                     time.sleep(cfg.cooldown)
-                print(f"  {backend}: repeat {repeat}")
-                records.append(measure_once(backend, fixture, repeat, baseline, cfg, launch_failures,
-                                             report_dir, baseline_error))
-                write_results(out, payload)
-                time.sleep(cfg.cooldown)
+    finally:
+        if origin is not None:
+            origin.terminate()
+            try:
+                origin.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                origin.kill()
 
     print(f"wrote {out}")
     return out
+
+
+def powermetrics_grant_present():
+    """True if `sudo powermetrics` runs without a password, the one privileged
+    call a session makes. With that grant the orchestrator can run as the
+    invoking user: the players then need no demotion at all, and an
+    unattended session no longer needs an interactive root shell to start."""
+    try:
+        result = subprocess.run(["sudo", "-n", "powermetrics", "--samplers", "thermal", "-n", "1", "-i", "100"],
+                                capture_output=True, stdin=subprocess.DEVNULL, timeout=30)
+    except Exception:
+        return False
+    return result.returncode == 0
 
 
 def main():
@@ -999,21 +1172,35 @@ def main():
                          help="comma-separated fixture filenames under Fixtures/")
     parser.add_argument("--backends", type=str, default=",".join(BACKENDS),
                          help="comma-separated backend names to include")
+    parser.add_argument("--arms", type=str, default=",".join(DEFAULT_ARMS),
+                         help=f"comma-separated delivery arms, any of {','.join(ARMS)}")
+    parser.add_argument("--origin-mbps", type=float, default=DEFAULT_ORIGIN_MBPS,
+                         help="the HTTP arm's link rate, shared across connections")
+    parser.add_argument("--origin-latency-ms", type=float, default=DEFAULT_ORIGIN_LATENCY_MS,
+                         help="the HTTP arm's latency, paid before every response header")
+    parser.add_argument("--origin-port", type=int, default=DEFAULT_ORIGIN_PORT)
     parser.add_argument("--output-dir", type=str, default=str(ROOT / "Results"))
     parser.add_argument("--dry-run", action="store_true",
                          help="tag the output file and its contents as a shortened "
                               "validation run, never to be read as published data")
     args = parser.parse_args()
 
-    if os.geteuid() != 0:
-        sys.exit("run under sudo: powermetrics requires it")
+    if os.geteuid() != 0 and not powermetrics_grant_present():
+        sys.exit("run under sudo, or install the powermetrics NOPASSWD grant (see the README): "
+                 "powermetrics requires root")
 
     cfg = ProtocolConfig(settle=args.settle, measure=args.measure, cooldown=args.cooldown,
                           repeats=args.repeats, max_launch_attempts=args.max_launch_attempts,
                           gate_threshold=args.gate_threshold, linger=args.linger)
     fixtures = [f for f in args.fixtures.split(",") if f]
     backends = [b for b in args.backends.split(",") if b]
-    run_session(cfg, fixtures, backends, args.output_dir, dry_run=args.dry_run)
+    arms = [a for a in args.arms.split(",") if a]
+    unknown = [a for a in arms if a not in ARMS]
+    if unknown or not arms:
+        sys.exit(f"--arms: unknown or empty ({','.join(unknown)}), expected any of {','.join(ARMS)}")
+    run_session(cfg, fixtures, backends, args.output_dir, dry_run=args.dry_run, arms=arms,
+                origin_mbps=args.origin_mbps, origin_latency_ms=args.origin_latency_ms,
+                origin_port=args.origin_port)
 
 
 if __name__ == "__main__":

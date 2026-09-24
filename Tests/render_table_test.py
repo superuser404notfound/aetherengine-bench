@@ -789,5 +789,73 @@ class RenderSurfaceTests(unittest.TestCase):
         self.assertNotIn("windowed 1920x1080", out)
 
 
+def _arm_run(backend, fixture, arm, repeat, gpu, cpu, rss, peak, discarded=False, reason=""):
+    return {"backend": backend, "fixture": fixture, "arm": arm, "repeat": repeat,
+            "discarded": discarded, "discardReason": reason,
+            "power": {"gpuPowerMw": gpu, "cpuPowerMw": 100.0},
+            "process": {"cpuPercentMean": cpu, "rssMbMean": rss, "footprintMbPeak": peak},
+            "droppedFramesReported": True,
+            "report": {"deliveredFrames": 1440, "expectedFrames": 1440, "droppedFrames": 0,
+                       "renderPixels": "3840x2160",
+                       "output": {"width": 3840, "height": 1714, "bitDepth": 10, "colorTransfer": "hdr10"}}}
+
+
+ARM_SAMPLE = {
+    "machine": "Apple-M1", "machineModel": "MacBookAir10,1", "os": "26.6", "date": "2026-09-24",
+    "versions": {"aether": "7.15.2"}, "protocol": {"measure": 60, "repeats": 2},
+    "arms": ["file", "http"], "origin": {"mbps": 1000.0, "latencyMs": 20.0},
+    "fixtures": {"hevc-4k-hdr10.mkv": {"mbps": 37.8}, "hevc-4k-hdr10-90m.mkv": {"mbps": 91.2}},
+    "launchFailures": {"ksplayer": {"hevc-4k-hdr10.mkv@http": 2, "hevc-4k-hdr10.mkv": 0}},
+    "runs": [
+        _arm_run("aether", "hevc-4k-hdr10.mkv", "file", 0, 60, 5.0, 300, 400),
+        _arm_run("aether", "hevc-4k-hdr10.mkv", "file", 1, 62, 5.2, 310, 420),
+        _arm_run("aether", "hevc-4k-hdr10.mkv", "http", 0, 61, 6.0, 330, 560),
+        _arm_run("aether", "hevc-4k-hdr10.mkv", "http", 1, 63, 6.4, 340, 580),
+        _arm_run("ksplayer", "hevc-4k-hdr10.mkv", "file", 0, 150, 7.0, 330, 350),
+        _arm_run("ksplayer", "hevc-4k-hdr10.mkv", "http", 0, 151, 8.0, 360, 390, True,
+                 "SoC reported throttling during the window (level=Moderate)"),
+        _arm_run("ksplayer", "hevc-4k-hdr10.mkv", "http", 1, 152, 8.2, 362, 395),
+        _arm_run("aether", "hevc-4k-hdr10-90m.mkv", "http", 0, 90, 9.0, 350, 700),
+    ],
+}
+
+
+class ArmTests(unittest.TestCase):
+    def test_both_arms_are_adjacent_rows_with_a_source_column(self):
+        out = render_table.render(ARM_SAMPLE)
+        self.assertIn("| | Source | GPU power | CPU load | RSS | Peak footprint | Plays |", out)
+        self.assertIn("| **AetherEngine** | disk | 61 mW | 5.1% of a core | 305 MB | 410 MB | Yes |", out)
+        self.assertIn("| | HTTP | 62 mW | 6.2% of a core | 335 MB | 570 MB | Yes |", out)
+
+    def test_the_origin_link_is_stated_with_the_numbers(self):
+        out = render_table.render(ARM_SAMPLE)
+        self.assertIn("hevc-4k-hdr10.mkv (38 Mbit/s), from local disk and over HTTP from a local range "
+                      "origin at 1000 Mbit/s shared, 20 ms latency per request", out)
+
+    def test_a_discard_marker_sits_on_the_arm_it_belongs_to(self):
+        out = render_table.render(ARM_SAMPLE)
+        self.assertIn("| | HTTP [1] |", out)
+        self.assertIn("[1] **KSPlayer**, hevc-4k-hdr10.mkv, HTTP: 1 of 2 repeat(s) discarded", out)
+
+    def test_launch_failures_name_their_arm(self):
+        out = render_table.render(ARM_SAMPLE)
+        self.assertIn("KSPlayer 2 (HTTP).", out)
+
+    def test_several_fixtures_share_one_header_and_one_set_of_notes(self):
+        out = render_table.render(ARM_SAMPLE, fixtures=["hevc-4k-hdr10.mkv", "hevc-4k-hdr10-90m.mkv"])
+        self.assertIn("**hevc-4k-hdr10-90m.mkv (91 Mbit/s)**", out)
+        self.assertEqual(out.count("Versions:"), 1)
+        self.assertEqual(out.count("Measured on"), 1)
+        self.assertEqual(out.count("| | Source |"), 2)
+
+    def test_a_session_without_footprint_gets_no_footprint_column(self):
+        out = render_table.render(SAMPLE)
+        self.assertNotIn("Peak footprint", out)
+
+    def test_a_session_without_arms_has_no_source_column(self):
+        out = render_table.render(SAMPLE)
+        self.assertNotIn("Source", out)
+
+
 if __name__ == "__main__":
     unittest.main()

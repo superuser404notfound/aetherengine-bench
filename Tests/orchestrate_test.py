@@ -374,6 +374,12 @@ class FindPlayerPidTests(unittest.TestCase):
         table = [(100, 1, "launchd"), (200, 100, "sudo"), (201, 200, "AetherBench")]
         self.assertEqual(orchestrate.find_player_pid(200, "AetherBench", lambda: table), 201)
 
+    def test_player_is_the_popen_pid_without_a_sudo_wrapper(self):
+        # A non-root session launches the binary directly, so the pid Popen
+        # hands back is the player itself, not a parent of it.
+        table = [(100, 1, "launchd"), (400, 100, "/path/to/AetherBench"), (401, 400, "VTDecoderXPCService")]
+        self.assertEqual(orchestrate.find_player_pid(400, "AetherBench", lambda: table), 400)
+
     def test_mpv_two_hops_below_sudo(self):
         # sudo -u user run-mpv.sh: sudo -> bash (running the script) -> mpv,
         # backgrounded with `&` inside the script. Verified empirically that
@@ -757,14 +763,33 @@ class DemoteTests(unittest.TestCase):
         # Under sudo, $USER is not reliably the invoking user (it can read
         # "root"); silently falling back to it would demote to root and
         # defeat the whole point.
-        with mock.patch.dict(os.environ, {"USER": "root"}, clear=False):
+        with mock.patch.object(orchestrate.os, "geteuid", return_value=0), \
+                mock.patch.dict(os.environ, {"USER": "root"}, clear=False):
             os.environ.pop("SUDO_USER", None)
             with self.assertRaises(SystemExit):
                 orchestrate.demote()
 
     def test_uses_sudo_user_when_present(self):
-        with mock.patch.dict(os.environ, {"SUDO_USER": "vincentherbst"}):
+        with mock.patch.object(orchestrate.os, "geteuid", return_value=0), \
+                mock.patch.dict(os.environ, {"SUDO_USER": "vincentherbst"}):
             self.assertEqual(orchestrate.demote(), ["sudo", "-u", "vincentherbst"])
+
+    def test_non_root_session_needs_no_demotion(self):
+        # Run as the invoking user (powermetrics grant present), the player
+        # already runs as that user; a sudo -u here would prompt for a
+        # password nobody is there to type.
+        with mock.patch.object(orchestrate.os, "geteuid", return_value=501):
+            self.assertEqual(orchestrate.demote(), [])
+
+
+class CellKeyTests(unittest.TestCase):
+    def test_file_arm_keeps_the_bare_fixture_name(self):
+        # Sessions recorded before arms existed have no "arm" at all; their
+        # launch-failure keys and cells must read exactly as before.
+        self.assertEqual(orchestrate.cell_key("hevc-4k-hdr10.mkv", "file"), "hevc-4k-hdr10.mkv")
+
+    def test_http_arm_is_its_own_cell(self):
+        self.assertEqual(orchestrate.cell_key("hevc-4k-hdr10.mkv", "http"), "hevc-4k-hdr10.mkv@http")
 
 
 def make_fake_clock():
@@ -975,6 +1000,23 @@ class WriteResultsTests(unittest.TestCase):
             orchestrate.write_results(out, {"runs": []})
             tmp = out.with_suffix(out.suffix + ".tmp")
             self.assertFalse(tmp.exists())  # os.replace consumed it
+
+
+class PurgeEngineTempTests(unittest.TestCase):
+    def test_removes_engine_caches_and_nothing_else(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = pathlib.Path(d)
+            (root / "aether-segments" / "x").mkdir(parents=True)
+            (root / "aether-segments" / "x" / "seg1.m4s").write_bytes(b"a" * 1000)
+            (root / "aether-software-packets-1234").mkdir()
+            (root / "aether-software-packets-1234" / "p").write_bytes(b"b" * 500)
+            (root / "keep-me").write_bytes(b"c")
+            self.assertEqual(orchestrate.purge_engine_temp(root), 1500)
+            self.assertEqual(sorted(p.name for p in root.iterdir()), ["keep-me"])
+
+    def test_missing_dir_is_zero_not_an_error(self):
+        self.assertEqual(orchestrate.purge_engine_temp(None), 0)
+        self.assertEqual(orchestrate.purge_engine_temp(pathlib.Path("/nonexistent/x")), 0)
 
 
 if __name__ == "__main__":

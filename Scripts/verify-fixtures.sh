@@ -20,7 +20,7 @@ check_duration() { # file
     echo "FAIL $1: duration ${got:-none} s, need at least 100 s"; fail=1
   else echo "ok   $1: ${got} s"; fi
 }
-for f in h264-1080p.mp4 hevc-4k-hdr10.mp4 hevc-4k-hdr10.mkv av1-10bit.mkv vp9.webm hevc-subs.mkv eac3-51.mp4 dv-p81.mp4; do
+for f in h264-1080p.mp4 hevc-4k-hdr10.mp4 hevc-4k-hdr10.mkv hevc-4k-hdr10-90m.mp4 hevc-4k-hdr10-90m.mkv av1-10bit.mkv vp9.webm hevc-subs.mkv eac3-51.mp4 dv-p81.mp4; do
   check_duration "$f"
 done
 check h264-1080p.mp4     v:0 stream=codec_name          h264
@@ -33,6 +33,23 @@ check hevc-4k-hdr10.mkv  v:0 stream=codec_name          hevc
 check hevc-4k-hdr10.mkv  v:0 stream=width               3840
 check hevc-4k-hdr10.mkv  v:0 stream=pix_fmt             yuv420p10le
 check hevc-4k-hdr10.mkv  v:0 stream=color_transfer      smpte2084
+# The high-rate pair exists for its bitrate, so the bitrate is what is asserted:
+# an encoder that fell short of a remux rate would quietly measure the 38 Mbit/s
+# case twice.
+check_min_mbps() { # file, minimum overall Mbit/s
+  local got
+  got=$(ffprobe -v error -show_entries format=bit_rate -of csv=p=0 "$1" 2>/dev/null)
+  if [ -z "$got" ] || [ "$((got / 1000000))" -lt "$2" ]; then
+    echo "FAIL $1: $((${got:-0} / 1000000)) Mbit/s, need at least $2"; fail=1
+  else echo "ok   $1: $((got / 1000000)) Mbit/s"; fi
+}
+for f in hevc-4k-hdr10-90m.mp4 hevc-4k-hdr10-90m.mkv; do
+  check "$f" v:0 stream=codec_name     hevc
+  check "$f" v:0 stream=width          3840
+  check "$f" v:0 stream=pix_fmt        yuv420p10le
+  check "$f" v:0 stream=color_transfer smpte2084
+  check_min_mbps "$f" 80
+done
 check av1-10bit.mkv     v:0 stream=codec_name          av1
 check av1-10bit.mkv     v:0 stream=pix_fmt             yuv420p10le
 check vp9.webm          v:0 stream=codec_name          vp9

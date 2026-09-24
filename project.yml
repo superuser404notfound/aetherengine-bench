@@ -2,7 +2,7 @@ name: AetherBench
 options:
   bundleIdPrefix: de.superuser404
   deploymentTarget:
-    macOS: "14.0"
+    macOS: "15.0"
   createIntermediateGroups: true
 settings:
   base:
@@ -18,7 +18,7 @@ settings:
 packages:
   AetherEngine:
     url: https://github.com/superuser404notfound/AetherEngine
-    revision: 73354ec8c6d20ca954b1874254b69fa19e2ffce5
+    revision: 079d74b9fad2e878afb892a4c771efd7c7ecfd58
   VLCKit:
     url: https://github.com/virtualox/vlckit-spm
     exactVersion: 4.0.0-alpha.21
@@ -32,16 +32,16 @@ targets:
     settings:
       base:
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: BACKEND_AETHER
-        # AetherEngine pulls in FFmpegBuild's Libav*/Libdav1d/Libswscale/Libzimg
-        # etc. frameworks, which SwiftPM stages into this tool's own directory
-        # (BUILT_PRODUCTS_DIR/Frameworks), one level below BUILT_PRODUCTS_DIR
-        # itself. The default "tool" rpath (@executable_path/../Frameworks)
-        # assumes an app-bundle nesting this target does not have, so it looks
-        # one level too high and the built binary dyld-fails outside Xcode's
-        # own test harness, exactly the VLCBench target's problem (see its own
+        # AetherEngine pulls in FFmpegBuild's frameworks (AetherLibavcodec and
+        # the rest since FFmpegBuild 3.x namespaced them), which SwiftPM stages
+        # next to this tool (BUILT_PRODUCTS_DIR; older toolchains used
+        # BUILT_PRODUCTS_DIR/Frameworks). The default "tool" rpath
+        # (@executable_path/../Frameworks) assumes an app-bundle nesting this
+        # target does not have, so the built binary dyld-fails outside Xcode's
+        # own test harness, the VLCBench target's problem (see its own
         # LD_RUNPATH_SEARCH_PATHS comment) for a different vendored framework
-        # set.
-        LD_RUNPATH_SEARCH_PATHS: ["$(inherited)", "@executable_path/Frameworks"]
+        # set. Both locations are searched.
+        LD_RUNPATH_SEARCH_PATHS: ["$(inherited)", "@executable_path", "@executable_path/Frameworks"]
     dependencies:
       - package: AetherEngine
   AetherBenchTests:
@@ -136,3 +136,14 @@ schemes:
     test:
       targets:
         - VLCBenchTests
+  # The one scheme Scripts/run-bench.sh builds. Xcode 27 removes the frameworks
+  # a previous build staged into BUILT_PRODUCTS_DIR when the next scheme builds,
+  # so three per-engine builds in a row left only the last engine launchable
+  # (AetherBench dyld-failed on AetherLibavcodec, VLCBench on VLCKit). One build
+  # of all three tools stages every framework at once.
+  AllBench:
+    build:
+      targets:
+        AetherBench: all
+        AVBench: all
+        VLCBench: all

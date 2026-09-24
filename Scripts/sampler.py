@@ -11,6 +11,7 @@ turned into a plausible-looking 0.0 or an empty aggregate. A missing or
 malformed reading is exactly as informative as a crash, and far less
 dangerous than a number that looks real but is not one.
 """
+import ctypes
 import os
 import re
 import subprocess
@@ -261,6 +262,59 @@ def _read_ps(pid):
     return cpu, rss_kb / 1024.0
 
 
+# proc_pid_rusage(RUSAGE_INFO_V4) layout: a 16-byte uuid, then uint64 fields.
+# Index 7 is ri_phys_footprint, index 28 ri_lifetime_max_phys_footprint (the
+# "peak memory footprint" /usr/bin/time -l prints, checked against it on this
+# machine: a 300 MB allocation read 304.8 MB here and 305.0 MB there). The
+# struct is padded past V4's 35 fields so a short read can never overrun it.
+_RUSAGE_INFO_V4 = 4
+_RI_PHYS_FOOTPRINT = 7
+_RI_LIFETIME_MAX_PHYS_FOOTPRINT = 28
+
+
+class _RusageInfo(ctypes.Structure):
+    _fields_ = [("uuid", ctypes.c_uint8 * 16)] + [(f"f{i}", ctypes.c_uint64) for i in range(40)]
+
+
+_libc = None
+
+
+def _read_footprint(pid):
+    """(footprintMb, lifetimeMaxFootprintMb) for pid, or None if the kernel
+    would not say (the pid is gone, or not ours to read).
+
+    Footprint is what jetsam acts on, and it is not RSS: it counts dirty and
+    compressed memory a process owns, and misses the clean file-backed pages
+    RSS includes. AetherEngine #620 moved one and not the other (mean RSS
+    barely changed, peak footprint fell by 330 to 420 MB), so both are
+    recorded. The lifetime maximum is read rather than the maximum of 1 Hz
+    samples because a transient allocation spike between two samples is
+    exactly what a peak column has to catch.
+    """
+    global _libc
+    if _libc is None:
+        _libc = ctypes.CDLL("/usr/lib/libSystem.B.dylib", use_errno=True)
+    info = _RusageInfo()
+    if _libc.proc_pid_rusage(int(pid), _RUSAGE_INFO_V4, ctypes.byref(info)) != 0:
+        return None
+    mb = 1024.0 * 1024.0
+    return (getattr(info, f"f{_RI_PHYS_FOOTPRINT}") / mb,
+            getattr(info, f"f{_RI_LIFETIME_MAX_PHYS_FOOTPRINT}") / mb)
+
+
+def aggregate_footprint(samples):
+    """samples is a list of (footprintMb, lifetimeMaxMb) readings in time
+    order. The peak is the LAST lifetime maximum (it only ever grows), which
+    includes the load phase before the window opened: that is deliberate, a
+    process that peaks while opening a file is killed there, not later."""
+    if not samples:
+        raise ValueError("aggregate_footprint: no samples to aggregate")
+    return {
+        "footprintMbMean": sum(f for f, _ in samples) / len(samples),
+        "footprintMbPeak": samples[-1][1],
+    }
+
+
 def _diagnose_pid_absence(pid):
     """Best-effort explanation for why _read_ps came back empty, using
     os.kill(pid, 0) to distinguish "gone" from "exists but not ours to see"."""
@@ -326,7 +380,13 @@ def sample_process(pid, seconds, interval=1.0):
     target = max(1, int(seconds / interval + 0.5))
 
     samples = []
+    footprints = []
+    footprint_unreadable = False
     while len(samples) < target:
+        # Footprint first: a process that exits between the two reads then
+        # fails the ps read below, the path that already reports it, instead
+        # of passing ps and leaving a hole in the footprint series.
+        footprint = _read_footprint(pid)
         reading = _read_ps(pid)
         if reading is None:
             reason = _diagnose_pid_absence(pid)
@@ -338,6 +398,17 @@ def sample_process(pid, seconds, interval=1.0):
                 )
             raise RuntimeError(f"sample_process: pid {pid} produced no reading ({reason})")
         samples.append(reading)
+        if footprint is None:
+            footprint_unreadable = True
+        else:
+            footprints.append(footprint)
         if len(samples) < target:
             time.sleep(interval)
-    return aggregate_process(samples)
+    result = aggregate_process(samples)
+    # A footprint the kernel would not report is None, never 0, and never a
+    # mean over a subset of the window that would read like the whole one.
+    if footprint_unreadable or not footprints:
+        result.update(footprintMbMean=None, footprintMbPeak=None)
+    else:
+        result.update(aggregate_footprint(footprints))
+    return result

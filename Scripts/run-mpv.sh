@@ -24,12 +24,17 @@ set -euo pipefail
 # not a config the code will discover for you.
 DEFAULT_LINGER_SECONDS=5
 
-URL="${1:?usage: run-mpv.sh <file> [settle=15] [measure=60] [report=/tmp/mpv.json] [linger=$DEFAULT_LINGER_SECONDS] [window_px=3840x2160]}"
+URL="${1:?usage: run-mpv.sh <file-or-http-url> [settle=15] [measure=60] [report=/tmp/mpv.json] [linger=$DEFAULT_LINGER_SECONDS] [window_px=3840x2160]}"
 SETTLE="${2:-15}"
 MEASURE="${3:-60}"
 REPORT="${4:-/tmp/mpv.json}"
 LINGER="${5:-$DEFAULT_LINGER_SECONDS}"
-[ -f "$URL" ] || { echo "run-mpv.sh: no such file: $URL" >&2; exit 1; }
+# An http(s) URL is the HTTP arm (Scripts/range-origin.py); mpv opens it with
+# its own network defaults, as it would against a media server.
+case "$URL" in
+  http://*|https://*) ;;
+  *) [ -f "$URL" ] || { echo "run-mpv.sh: no such file: $URL" >&2; exit 1; } ;;
+esac
 
 # Fixed window on a fixed display, matching what BenchWindow.swift actually
 # renders into. That distinction is the whole point: AppKit takes its size in

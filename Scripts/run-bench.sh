@@ -5,11 +5,13 @@
 #      --repeats 1 --fixtures h264-1080p.mp4
 set -euo pipefail
 cd "$(dirname "$0")/.."
-[ "$(id -u)" -eq 0 ] || { echo "run: sudo Scripts/run-bench.sh"; exit 1; }
-for scheme in AetherBench AVBench VLCBench; do
-  xcodebuild -project AetherBench.xcodeproj -scheme "$scheme" \
-    -configuration Release -derivedDataPath .build build
-done
+# Root, or the powermetrics NOPASSWD grant (README step 2): with the grant the
+# session runs as the invoking user and needs no interactive root shell.
+[ "$(id -u)" -eq 0 ] || sudo -n powermetrics --samplers thermal -n 1 -i 100 >/dev/null 2>&1 \
+  || { echo "run: sudo Scripts/run-bench.sh, or install the powermetrics grant (README step 2)"; exit 1; }
+# One scheme for all three tools, not three builds: see AllBench in project.yml.
+xcodebuild -project AetherBench.xcodeproj -scheme AllBench \
+  -configuration Release -derivedDataPath .build build
 xcodebuild -project KSBench.xcodeproj -scheme KSBench \
   -configuration Release -derivedDataPath .build-ks build
 

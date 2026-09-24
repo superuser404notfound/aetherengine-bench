@@ -51,6 +51,21 @@ ffmpeg -y -i hevc-4k-hdr10-video.mp4 $CUT -i "$A" -map 0:v -map 1:a -c:v copy \
 #     gating AV1 and the full decoder set does not extend to Matroska.
 ffmpeg -y -i hevc-4k-hdr10.mp4 -c:v copy -c:a copy hevc-4k-hdr10.mkv
 
+# 2c. The same 4K HDR10 clip at about 90 Mbit/s, the rate of a UHD Blu-ray
+#     remux, where an engine's reader and read-ahead costs start to show
+#     (aetherengine-bench#1). Encoded from 2's video rather than the master,
+#     so the two differ in bitrate and nothing else: same frames, same audio,
+#     same HDR signalling. The animation alone does not need 90 Mbit/s, so a
+#     light temporal grain gives the encoder something to spend it on, which
+#     is also what film grain does in a real remux. Same x265 settings as 2.
+ffmpeg -y -i hevc-4k-hdr10.mp4 -map 0:v -vf 'noise=alls=10:allf=t' \
+  -c:v libx265 -preset fast -b:v 90M -maxrate 110M -bufsize 180M \
+  -pix_fmt yuv420p10le \
+  -x265-params "colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,1):max-cll=1000,400" \
+  -an hevc-4k-hdr10-90m-video.mp4
+ffmpeg -y -i hevc-4k-hdr10-90m-video.mp4 -i hevc-4k-hdr10.mp4 -map 0:v -map 1:a -c copy hevc-4k-hdr10-90m.mp4
+ffmpeg -y -i hevc-4k-hdr10-90m.mp4 -c copy hevc-4k-hdr10-90m.mkv
+
 # 3. AV1 10-bit in MKV. No hardware AV1 on M1, so this is the software race.
 ffmpeg -y $CUT -i "$M" -vf scale=1920:-2 -c:v libsvtav1 -preset 8 -crf 30 \
   -pix_fmt yuv420p10le -c:a libopus -b:a 128k -ac 2 av1-10bit.mkv
@@ -82,5 +97,5 @@ dovi_tool generate --json dv-gen.json --rpu-out dv-rpu.bin
 dovi_tool inject-rpu -i dv-raw.hevc --rpu-in dv-rpu.bin -o dv-injected.hevc
 MP4Box -add "dv-injected.hevc:dvp=8.1:hdlr=vide" -new dv-p81.mp4
 
-rm -f h264-1080p-video.mp4 hevc-4k-hdr10-video.mp4 dv-raw.hevc dv-injected.hevc subs.srt subs.ass dv-gen.json dv-rpu.bin
+rm -f h264-1080p-video.mp4 hevc-4k-hdr10-video.mp4 hevc-4k-hdr10-90m-video.mp4 dv-raw.hevc dv-injected.hevc subs.srt subs.ass dv-gen.json dv-rpu.bin
 echo "fixtures built"
